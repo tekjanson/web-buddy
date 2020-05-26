@@ -3,6 +3,7 @@
 
 const host = chrome;
 
+
 let list = [];
 let script;
 const storage = host.storage.local;

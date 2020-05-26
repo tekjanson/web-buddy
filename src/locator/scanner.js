@@ -7,7 +7,7 @@ const scanner = {
     this.limit = this.limit - 1;
     if ((this.limit <= 0) || (root === undefined)) return [];
 
-    const hash = classifier(root);
+    const hash = classifier.classify(root);
 
     if (hash !== null) {
       const tree = builder.build(root, attributesArray, []);
@@ -28,13 +28,16 @@ const scanner = {
 
   parseNode(time, node, attributesArray) {
     if (node !== undefined) {
-      const hash = classifier(node) || { type: 'default' };
+      // identifying what type of thing we are dealing with
+      // TODO this could be improved i think to improve xpath return
+
+      const hash = classifier.classify(node) || { type: 'default' };
 
       const tree = builder.build(node, attributesArray, []);
 
       Object.assign(hash, {
         time,
-        path: locator.build(tree, node, hash.type)
+        path: locator.build(tree, node, hash.type, hash)
       });
       return hash;
     }

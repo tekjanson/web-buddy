@@ -1,4 +1,4 @@
-const url = 'https://github.com/sohwendy/Robotcorder';
+const url = 'https://github.com/tekjanson/Robotcorder';
 
 const tab = { active: true, currentWindow: true };
 

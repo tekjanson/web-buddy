@@ -26,6 +26,7 @@ function handleByChange(type) {
 }
 
 function recordChange(event) {
+
   const attr = scanner.parseNode(getTime(), event.target, strategyList);
 
   if (handleByChange(attr.type)) {
@@ -35,6 +36,7 @@ function recordChange(event) {
 }
 
 function recordClick(event) {
+
   const attr = scanner.parseNode(getTime(), event.target, strategyList);
 
   if (!handleByChange(attr.type)) {

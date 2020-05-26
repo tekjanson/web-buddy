@@ -50,6 +50,8 @@ const builder = {
 
   // traverse up the document tree to construct an array containing the element attributes
   build(element, attributesArray, pathList) {
+
+    
     if (!element) return pathList;
     if (element.nodeType === 9) return pathList;
 
