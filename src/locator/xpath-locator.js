@@ -2,13 +2,12 @@
 
 const locator = {
   build(tree, element, type, hash) {
-
-    // getting item 
+    // getting item
     const item = tree[0];
     // getting tag of element
     const tag = Object.keys(item)[0];
     // extra detailed information is from hash
-    const value = hash
+    const value = hash;
     const p = item[tag].reduce(
       (subpath, attr) => (
         // get subpath for path, builds as it loops
@@ -17,7 +16,7 @@ const locator = {
       ''
     );
     const path = `/${p}`;
-    // if there is no more elelments the path is done 
+    // if there is no more elelments the path is done
     if (!element) return path;
     // if we have id or for or name the path is done
     if (this._found(['@id', '@for'], path)) return path;

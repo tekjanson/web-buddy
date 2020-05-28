@@ -2,7 +2,9 @@
 
 const host = chrome;
 let strategyList = [];
-
+const once = {
+  once : true
+};
 /*
 var observer = new MutationObserver(recordMutate);
 var config = { attributes: true, characterData: true, subtree: true, childList: true};
@@ -34,11 +36,29 @@ function recordChange(event) {
     host.runtime.sendMessage({ operation: 'action', script: attr });
   }
 }
+// i don't love this but i don't know how to do it better, even though there is.
+// place your cursor over the area you wish to hover then hit
+// alt+h. when you move your mouse again the element under it will be recorded
+function recordKeydown(event) {
+  
+  if (event.altKey  &&  event.key === "h") {  // case sensitive
+
+    document.addEventListener('mousemove', recordClickHover, once);
+    function recordClickHover(event) {
+    const attr = scanner.parseNode(getTime(), event.target, strategyList);
+      attr.type = "hover";
+      if (!handleByChange(attr.type)) {
+        Object.assign(attr, { trigger: 'hover' });
+        host.runtime.sendMessage({ operation: 'action', script: attr });
+      }
+    }
+}
+}
+
 
 function recordClick(event) {
 
   const attr = scanner.parseNode(getTime(), event.target, strategyList);
-
   if (!handleByChange(attr.type)) {
     Object.assign(attr, { trigger: 'click' });
     host.runtime.sendMessage({ operation: 'action', script: attr });
@@ -50,14 +70,17 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     strategyList = request.locators || [];
     strategyList.push('index');
     document.addEventListener('change', recordChange, true);
+    document.addEventListener('keydown', recordKeydown, true);
     document.addEventListener('click', recordClick, true);
   } else if (request.operation === 'stop') {
     document.removeEventListener('change', recordChange, true);
+    document.removeEventListener('keydown', recordKeydown, true)
     document.removeEventListener('click', recordClick, true);
   } else if (request.operation === 'scan') {
     strategyList = request.locators || [];
     strategyList.push('index');
     document.removeEventListener('change', recordChange, true);
+    document.removeEventListener('keydown', recordKeydown, true)
     document.removeEventListener('click', recordClick, true);
 
     scanner.limit = 1000;

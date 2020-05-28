@@ -2,6 +2,7 @@ const map = {
   url: { keyword: 'Open Browser' },
   text: { keyword: 'Input Text', value: 'y' },
   file: { keyword: 'Choose File', value: 'y' },
+  hover: { keyword: 'Mouse Over', value: 'y' },
   button: { keyword: 'Click Button' },
   a: { keyword: 'Click Link' },
   select: { keyword: 'Select From List By Value', value: 'y' },
