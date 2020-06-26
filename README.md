@@ -21,31 +21,17 @@ go to chrome://extensions
 click on Extension options  
 edit and update the locators
 
-
-## Download
-[Robotcorder - Chrome Web Store](https://chrome.google.com/webstore/detail/robotcorder/ifiilbfgcemdapeibjfohnfpfmfblmpd)
-
-
-## Package
-``` $ script/export.command ```
-or
-``` $ npm run export ```
-
-
-## To Do
-- [ ] use select from radio, checkbox
-- [ ] check why display is receiving null message
-- [ ] write unit test
-- [X] setup ci
-- [X] add more configurations
+## How To Add The Extension
+1. Clone the repository (``` $ git clone https://github.com/tekjanson/Robotcorder.git ```)
+2. Once the reposityry has been cloned, go to chrome://extensions/
+3. In the upper right hand corner of the page, silde the toggle so that developer mode is ON
+4. Select "Load Unpack" 
+5. Select the cloned repository folder and click "Open"
+6. The Robocorder extension will appear, ready to use
 
 
 ## Contributing
-1. Fork it
-2. Create your feature branch (git checkout -b my-new-feature)
-3. Commit your changes (git commit -am 'Add some feature')
-4. Push to the branch (git push origin my-new-feature)
-5. Create new Pull Request
+- Use branches, do not fork
 
 ## Change Log
 Refer to [CHANGELOG.md](http://bit.ly/robotcorder-changelog)
