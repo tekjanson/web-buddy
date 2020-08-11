@@ -116,7 +116,18 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   else if (operation == "POM") { //POM stuff
     //icon.setIcon({ path: logo.stop }); //change extension icon
-
+    type="text/javascript"
+        document.getElementById('inputfile') 
+            .addEventListener('change', function() { 
+              
+            var fr=new FileReader(); 
+            fr.onload=function(){ 
+                document.getElementById('output') 
+                        .textContent=fr.result; 
+            } 
+              
+            fr.readAsText(this.files[0]); 
+        }) 
      storage.set({ message: statusMessage[operation], operation, canSave: false });
   }
   else if (operation === 'settings') {
