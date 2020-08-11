@@ -105,7 +105,7 @@ html {
 }
 
 .container {
-    min-width: 600px;
+    min-width: 700px; /*600 chages size of the extension*/
     text-align: left;
 }
 
