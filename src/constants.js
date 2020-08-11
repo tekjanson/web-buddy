@@ -2,23 +2,25 @@ const url = 'https://github.com/tekjanson/Robotcorder';
 
 const tab = { active: true, currentWindow: true };
 
-const logo = {
+const logo = { //what logo corresponds to what action that is currently happening
   stop: '/assets/icon-stop.png',
   record: '/assets/icon-record.png',
   scan: '/assets/icon-stop.png',
   action: '/assets/icon-action.png',
-  pause: '/assets/icon-pause.png'
+  pause: '/assets/icon-pause.png',
+  POM: '/assets/icon-stop.png'
 };
 
-const filename = 'test_script.robot';
+const filename = 'test_script.robot'; //when saving a testing file, this is the name it automatically saves to
 
-const statusMessage = {
+const statusMessage = { //message in the main box during action 
   stop: 'Stopped',
   record: 'Recording action...',
-  scan: 'Scanning html document...'
+  scan: 'Scanning html document...',
+  POM: 'Opening File Explorer...' //this is to get the messgae in the box
 };
 
-const instruction = 'Robotcorder\n'
+const instruction = 'Robotcorder\n' //general instructions
   + '\n'
   + 'Generate your RobotFramework Test Script via\n'
   + '* Record user actions\n'

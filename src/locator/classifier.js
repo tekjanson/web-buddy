@@ -1,6 +1,6 @@
 
 const classifier = { 
- classify (element) {
+ classify (element) { 
   let hash = null;
   const tag = element.tagName.toLowerCase();
   if (tag === 'input') {
