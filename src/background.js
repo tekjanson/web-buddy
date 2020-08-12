@@ -3,12 +3,11 @@
 
 const host = chrome;
 
-
 let list = [];
 let script;
-const storage = host.storage.local; //chrome local stprage
-const content = host.tabs; //chrome tabs
-const icon = host.browserAction; //stuff chrome is doing??
+const storage = host.storage.local;
+const content = host.tabs;
+const icon = host.browserAction;
 const maxLength = 5000;
 let recordTab = 0;
 let demo = false;
@@ -37,24 +36,23 @@ function selection(item) {
     return;
   }
 
-  if (item.trigger === 'click') { return; } //nothing is recorded when you click
+  if (item.trigger === 'click') { return; }
 
-  if ((item.trigger === 'change') && (prevItem.trigger === 'click')) { //if comething changes and there was a click
-    list[list.length - 1] = item; //make the most recent item the prev item
+  if ((item.trigger === 'change') && (prevItem.trigger === 'click')) {
+    list[list.length - 1] = item;
     return;
   }
 
-  list.push(item); //physically add item to list 
+  list.push(item);
 }
 
-
 host.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  let { operation } = request; 
+  let { operation } = request;
 
   if (operation === 'record') {
-    icon.setIcon({ path: logo[operation] }); //changes extension icon to the record one
+    icon.setIcon({ path: logo[operation] });
 
-    content.query(tab, (tabs) => { //get event, reorganize data, pass data along to background process
+    content.query(tab, (tabs) => {
       [recordTab] = tabs;
       list = [{
         type: 'url', path: recordTab.url, time: 0, trigger: 'record', title: recordTab.title
@@ -62,29 +60,29 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
       content.sendMessage(tabs[0].id, { operation, locators: request.locators });
     });
 
-    storage.set({ message: statusMessage[operation], operation, canSave: false }); 
+    storage.set({ message: statusMessage[operation], operation, canSave: false });
   } else if (operation === 'pause') {
-    icon.setIcon({ path: logo.pause }); //changes icon to pause icon
+    icon.setIcon({ path: logo.pause });
 
     content.query(tab, (tabs) => {
-      content.sendMessage(tabs[0].id, { operation: 'stop' }); //pause "stops" the recording until resumed
+      content.sendMessage(tabs[0].id, { operation: 'stop' });
     });
-    storage.set({ operation: 'pause', canSave: false, isBusy: false }); 
+    storage.set({ operation: 'pause', canSave: false, isBusy: false });
   } else if (operation === 'resume') {
-    operation = 'record'; //changes operation back to record
+    operation = 'record';
 
-    icon.setIcon({ path: logo[operation] }); //changes icon
+    icon.setIcon({ path: logo[operation] });
 
-    content.query(tab, (tabs) => { //query stuff
+    content.query(tab, (tabs) => {
       [recordTab] = tabs;
       content.sendMessage(tabs[0].id, { operation, locators: request.locators });
     });
 
-    storage.set({ message: statusMessage[operation], operation, canSave: false }); //hello wat
+    storage.set({ message: statusMessage[operation], operation, canSave: false });
   } else if (operation === 'scan') {
-    icon.setIcon({ path: logo.action }); //change icon
+    icon.setIcon({ path: logo.action });
 
-    content.query(tab, (tabs) => { //confusing stuff
+    content.query(tab, (tabs) => {
       [recordTab] = tabs;
       list = [{
         type: 'url', path: recordTab.url, time: 0, trigger: 'scan', title: recordTab.title
@@ -96,11 +94,11 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
       message: statusMessage[operation], operation: 'scan', canSave: true, isBusy: true
     });
   } else if (operation === 'stop') {
-    recordTab = 0; //part of the confusing stuff
+    recordTab = 0;
     icon.setIcon({ path: logo[operation] });
 
     script = translator.generateOutput(list, maxLength, demo, verify);
-    content.query(tab, (tabs) => { 
+    content.query(tab, (tabs) => {
       content.sendMessage(tabs[0].id, { operation: 'stop' });
     });
 
@@ -113,24 +111,7 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
       url: URL.createObjectURL(blob, { oneTimeOnly: true }),
       filename
     });
-  }
-  else if (operation == "POM") { //POM stuff
-    //icon.setIcon({ path: logo.stop }); //change extension icon
-    type="text/javascript"
-        document.getElementById('inputfile') 
-            .addEventListener('change', function() { 
-              
-            var fr=new FileReader(); 
-            fr.onload=function(){ 
-                document.getElementById('output') 
-                        .textContent=fr.result; 
-            } 
-              
-            fr.readAsText(this.files[0]); 
-        }) 
-     storage.set({ message: statusMessage[operation], operation, canSave: false });
-  }
-  else if (operation === 'settings') {
+  } else if (operation === 'settings') {
     ({ demo, verify } = request);
 
     storage.set({ locators: request.locators, demo, verify });

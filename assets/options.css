@@ -1,7 +1,7 @@
 
 .panel-options {
   padding: 0.5rem;
-  width: 350px; /*350*/
+  width: 350px;
   height: 20px;
   padding: 10px;
 }
@@ -16,10 +16,9 @@
 .heading {
   grid-column: 1 / 4;
   grid-row: 1;
-  font-size: 1.2rem;
   /*h1 {
-     1.2rem; 
-  }*/
+    font-size: 1.2rem;
+  } */
 }
 
 input#custom-locators {
@@ -30,7 +29,7 @@ input#custom-locators {
 }
 
 input#custom-locators:focus {
-  outline: 1x solid #D2D2D2;
+  outline: 1px solid #D2D2D2;
   margin: none;
 }
 

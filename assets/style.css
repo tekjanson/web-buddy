@@ -14,7 +14,6 @@
     src: local('Roboto'), local('Roboto-Regular'), local('sans-serif'), url('../vendors/roboto-latin.woff2') format('woff2');
     unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215;
 }
-/* add image to buttons*/
 
 #scan::before {
     background-image: url("btn-scan.svg");
@@ -90,22 +89,18 @@
   background-image: url("btn-reset.svg");
 }
 
-#pom::before {
-    background-image: url("btn-update.svg") 
-}
-
 body {
     font-family: 'Roboto', sans-serif;
-    font-weight: 300; /*300*/
+    font-weight: 300;
 }
 
 html {
-    font-size: 16px; /*16*/
+    font-size: 16px;
     box-sizing: border-box;
 }
 
 .container {
-    min-width: 700px; /*600 chages size of the extension*/
+    min-width: 500px;
     text-align: left;
 }
 
@@ -267,4 +262,3 @@ button.copy-ok:hover {
     z-index: 1;
     border: 1px solid #474747;
 }
-

@@ -1,3 +1,4 @@
+ 
 /* global document $ chrome ClipboardJS */
 const debug = false;
 const gaAccount = 'UA-88380525-1';
@@ -56,7 +57,7 @@ clipboard.on('error', (e) => {
   /* eslint-enable no-console */
 });
 
-function display(message) { //displays new message?
+function display(message) {
   if (message && message.message) {
     const field = document.querySelector('#textarea-script');
     field.value = message.message || '';
@@ -81,19 +82,19 @@ function toggle(e) {
   logger(e.target.id);
   if (e.target.id === 'record') {
     show(['stop', 'pause'], true);
-    show(['record', 'resume', 'scan', 'POM'], false);
+    show(['record', 'resume', 'scan'], false);
     enable(['settings-panel'], false);
 
     $('#sortable').sortable('disable');
   } else if (e.target.id === 'pause') {
     show(['resume', 'stop'], true);
-    show(['record', 'scan', 'pause', 'POM'], false);
+    show(['record', 'scan', 'pause'], false);
     enable(['settings-panel'], false);
 
     $('#sortable').sortable('disable');
   } else if (e.target.id === 'resume') {
     show(['pause', 'stop'], true);
-    show(['record', 'scan', 'resume', 'POM'], false);
+    show(['record', 'scan', 'resume'], false);
     enable(['settings-panel'], false);
 
     $('#sortable').sortable('disable');
@@ -103,12 +104,6 @@ function toggle(e) {
     enable(['settings-panel'], true);
 
     $('#sortable').sortable('enable');
-  } else if (e.target.id == 'POM') { //added so only specific buttons will be available during the POM import
-    show(['record', 'scan', 'POM'], true);
-    show(['resume', 'stop', 'pause'], false);
-    enable(['settings-panel'], true); 
-
-    $('#sortable').sortable('disable');
   } else if (e.target.id === 'settings') {
     analytics(['_trackEvent', 'settings', '⚙️']);
     document.getElementById('settings-panel').classList.toggle('hidden');
@@ -138,8 +133,6 @@ function operation(e) {
 
   analytics(['_trackEvent', e.target.id, '^-^']);
 }
-
-//some of the button stuff is here
 
 function settings(e) {
   const locators = $('#sortable').sortable('toArray', { attribute: 'id' });
@@ -193,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   debug ? document.getElementById('textarea-log').classList.remove('hidden') : 0;
 
-  ['record', 'resume', 'stop', 'pause', 'save', 'scan', 'POM'].forEach((id) => { //added POM here
+  ['record', 'resume', 'stop', 'pause', 'save', 'scan'].forEach((id) => {
     document.getElementById(id).addEventListener('click', operation);
   });
 
