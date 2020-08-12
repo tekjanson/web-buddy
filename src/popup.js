@@ -82,28 +82,34 @@ function toggle(e) {
   logger(e.target.id);
   if (e.target.id === 'record') {
     show(['stop', 'pause'], true);
-    show(['record', 'resume', 'scan'], false);
+    show(['record', 'resume', 'scan', 'pom'], false);
     enable(['settings-panel'], false);
 
     $('#sortable').sortable('disable');
   } else if (e.target.id === 'pause') {
-    show(['resume', 'stop'], true);
-    show(['record', 'scan', 'pause'], false);
+    show(['resume', 'stop'], true); 
+    show(['record', 'scan', 'pause', 'pom'], false);
     enable(['settings-panel'], false);
 
     $('#sortable').sortable('disable');
   } else if (e.target.id === 'resume') {
     show(['pause', 'stop'], true);
-    show(['record', 'scan', 'resume'], false);
+    show(['record', 'scan', 'resume', 'pom'], false);
     enable(['settings-panel'], false);
 
     $('#sortable').sortable('disable');
   } else if ((e.target.id === 'stop') || (e.target.id === 'scan')) {
-    show(['record', 'scan'], true);
+    show(['record', 'scan'], true); //add pom?
     show(['resume', 'stop', 'pause'], false);
     enable(['settings-panel'], true);
 
     $('#sortable').sortable('enable');
+
+  } else if (e.target.id == 'pom') { //added so only specific buttons will be available during the POM import
+    show(['record', 'scan', 'pom'], true);
+    show(['resume', 'stop', 'pause'], false);
+    enable(['settings-panel'], true); 
+
   } else if (e.target.id === 'settings') {
     analytics(['_trackEvent', 'settings', '⚙️']);
     document.getElementById('settings-panel').classList.toggle('hidden');
@@ -121,7 +127,7 @@ function toggle(e) {
 function busy(e) {
   if ((e.isBusy === true) || (e.isBusy === false)) {
     ['scan', 'record', 'stop', 'save', 'save', 'resume'].forEach((id) => {
-      document.getElementById(id).disabled = e.isBusy;
+      document.getElementById(id).disabled = e.isBusy; //add pom?
     });
   }
 }
@@ -133,7 +139,7 @@ function operation(e) {
 
   analytics(['_trackEvent', e.target.id, '^-^']);
 }
-
+//some of the button stuff is here
 function settings(e) {
   const locators = $('#sortable').sortable('toArray', { attribute: 'id' });
   const demo = document.getElementById('demo').checked;
@@ -186,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   debug ? document.getElementById('textarea-log').classList.remove('hidden') : 0;
 
-  ['record', 'resume', 'stop', 'pause', 'save', 'scan'].forEach((id) => {
+  ['record', 'resume', 'stop', 'pause', 'save', 'scan'].forEach((id) => { //add pom??
     document.getElementById(id).addEventListener('click', operation);
   });
 

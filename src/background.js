@@ -111,7 +111,11 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
       url: URL.createObjectURL(blob, { oneTimeOnly: true }),
       filename
     });
-  } else if (operation === 'settings') {
+  } 
+  else if (operation == 'pom') { //if the button is pom
+      //insert code here
+  }  
+  else if (operation === 'settings') {
     ({ demo, verify } = request);
 
     storage.set({ locators: request.locators, demo, verify });
