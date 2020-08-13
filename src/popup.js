@@ -106,12 +106,11 @@ function toggle(e) {
 
     $('#sortable').sortable('enable');
 
-  } else if (e.target.id == 'pom') { //added so only specific buttons will be available during the POM import
+  } else if (e.target.id === 'pom') { //added so only specific buttons will be available during the POM import
     show(['record', 'scan', 'pom'], true);
     show(['resume', 'stop', 'pause'], false);
     enable(['settings-panel'], true); 
 
-    $('#sortable').sortable('disable'); ///enable?
   } else if (e.target.id === 'settings') {
     analytics(['_trackEvent', 'settings', '⚙️']);
     document.getElementById('settings-panel').classList.toggle('hidden');
@@ -134,25 +133,34 @@ function busy(e) {
   }
 }
 
-function operation(e) { //code added here for opening file explorer
-  console.log(e.target.id) //add code for file input here
+function operation(e) {
+	console.log(e.target.id)
 	if (e.target.id === 'pom') {
-    var input = document.createElement('input');
-    input.type = 'file';
+var input = document.createElement('input');
+input.type = 'file';
 
-    input.onchange = e => { 
-      var file = e.target.files[0]; 
-      //insert file reading and output here
-    }
+input.onchange = e => { 
+  var file = e.target.files[0]; 
 
-    input.click();
+  const name = file.name;
+  const size = file.size;
+  const type = file.type;
+  console.log(name, size, type);
+  
+  var fr = new FileReader();
+
+  file.readAsText(file);
+  
+
+}
+
+input.click();
 	}
   toggle(e);
   const locators = $('#sortable').sortable('toArray', { attribute: 'id' });
   host.runtime.sendMessage({ operation: e.target.id, locators }, display);
 
   analytics(['_trackEvent', e.target.id, '^-^']);
-  
 }
 //some of the button stuff is here
 function settings(e) {
