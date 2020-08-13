@@ -80,6 +80,7 @@ function enable(array, isEnabled) {
 
 function toggle(e) {
   logger(e.target.id);
+
   if (e.target.id === 'record') {
     show(['stop', 'pause'], true);
     show(['record', 'resume', 'scan', 'pom'], false);
@@ -110,6 +111,7 @@ function toggle(e) {
     show(['resume', 'stop', 'pause'], false);
     enable(['settings-panel'], true); 
 
+    $('#sortable').sortable('disable'); ///enable?
   } else if (e.target.id === 'settings') {
     analytics(['_trackEvent', 'settings', '⚙️']);
     document.getElementById('settings-panel').classList.toggle('hidden');
@@ -132,12 +134,25 @@ function busy(e) {
   }
 }
 
-function operation(e) {
+function operation(e) { //code added here for opening file explorer
+  console.log(e.target.id) //add code for file input here
+	if (e.target.id === 'pom') {
+    var input = document.createElement('input');
+    input.type = 'file';
+
+    input.onchange = e => { 
+      var file = e.target.files[0]; 
+      //insert file reading and output here
+    }
+
+    input.click();
+	}
   toggle(e);
   const locators = $('#sortable').sortable('toArray', { attribute: 'id' });
   host.runtime.sendMessage({ operation: e.target.id, locators }, display);
 
   analytics(['_trackEvent', e.target.id, '^-^']);
+  
 }
 //some of the button stuff is here
 function settings(e) {
@@ -192,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   debug ? document.getElementById('textarea-log').classList.remove('hidden') : 0;
 
-  ['record', 'resume', 'stop', 'pause', 'save', 'scan'].forEach((id) => { //add pom??
+  ['record', 'resume', 'stop', 'pause', 'save', 'scan', 'pom'].forEach((id) => { //add pom??
     document.getElementById(id).addEventListener('click', operation);
   });
 

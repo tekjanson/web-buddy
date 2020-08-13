@@ -50,7 +50,7 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
   let { operation } = request;
 
   if (operation === 'record') {
-    icon.setIcon({ path: logo[operation] });
+    icon.setIcon({ path: logo[operation] }); //sets robot icon
 
     content.query(tab, (tabs) => {
       [recordTab] = tabs;
@@ -113,7 +113,7 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
   } 
   else if (operation == 'pom') { //if the button is pom
-      //insert code here
+    storage.set({ message: statusMessage[operation], operation, canSave: false });
   }  
   else if (operation === 'settings') {
     ({ demo, verify } = request);
