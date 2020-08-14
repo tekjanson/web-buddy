@@ -141,20 +141,46 @@ input.type = 'file';
 
 input.onchange = e => { 
   var file = e.target.files[0]; 
-
+  console.log(file);
   const name = file.name;
   const size = file.size;
   const type = file.type;
-  console.log(name, size, type);
+  console.log(name, size, type); 
   
-  var fr = new FileReader();
+  var fr = new FileReader(); 
 
-  fr.readAsText(file);
   var text = fr.result; //text from pom file
+  console.log(text);
+
+  fr.onload = function(e) {
+    var text = fr.result; //text from pom file
+    //console.log(text);
+    const start = "#robotcorder start";
+    const stop = "#robotcorder stop";
+    const arr = [];
+    while(text.indexOf(stop) !== -1) {
+      var mySubString = text.substring(
+        text.indexOf(start) + start.length, 
+        text.indexOf(stop)
+    )
+    text = text.substring(text.indexOf(stop) + stop.length, text.length);
+    //console.log(mySubString.substring(0, mySubString.indexOf("\n")));
+    const s = mySubString.split("\n");
+    arr.push({keyword : s[1], arguments : s[3]});
+      
+
+    /*arr.push(mySubString);
+    console.log(mySubString)
+    console.log("line"); */
+    }
+    console.log(arr);
+    
+  };
+    fr.readAsText(file);
 
   //I need to output the text here. Code used elsehwere below, but I know I need something else
 
-  //storage.set({ message: text, operation, canSave: false });
+  //storage.set({ message: text, operation, canSave: false }); */
 
 }
 
