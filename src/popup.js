@@ -149,8 +149,12 @@ input.onchange = e => {
   
   var fr = new FileReader();
 
-  file.readAsText(file);
-  
+  fr.readAsText(file);
+  var text = fr.result; //text from pom file
+
+  //I need to output the text here. Code used elsehwere below, but I know I need something else
+
+  //storage.set({ message: text, operation, canSave: false });
 
 }
 
