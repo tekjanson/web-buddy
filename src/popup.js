@@ -251,8 +251,16 @@ document.addEventListener(
   "DOMContentLoaded",
   () => {
     var appendDiv = document.getElementById("keywordDiv");
+
     //     activities.addEventListener("onchange", function()
     $('#keywordSelect').change(function(select){
+      var killDiv = document.getElementById('tempDiv')
+      if (killDiv !== null){
+        killDiv.remove()
+      }
+      var tempDiv = document.createElement('div');
+      tempDiv.id = 'tempDiv'
+      appendDiv.appendChild(tempDiv)
         console.log(select);
         var activities = document.getElementById("keywordSelect");
         
@@ -262,7 +270,7 @@ document.addEventListener(
         for( let i=0; i<reObj.arguments.number; i++){
             var btn = document.createElement("textarea");   // Create a <button> element
             btn.innerHTML = `${reObj.arguments.types[i]}`;                   // Insert text
-            appendDiv.appendChild(btn);               // Append <button> to <body>
+            tempDiv.appendChild(btn);               // Append <button> to <body>
         }
         
     });
