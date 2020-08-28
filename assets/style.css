@@ -89,6 +89,10 @@
   background-image: url("btn-reset.svg");
 }
 
+#pom::before {
+    background-image: url("btn-update.svg"); /* added baground image to button" */
+}
+
 body {
     font-family: 'Roboto', sans-serif;
     font-weight: 300;
@@ -100,7 +104,7 @@ html {
 }
 
 .container {
-    min-width: 500px;
+    min-width: 600px; /*changes size of the extension*/ 
     text-align: left;
 }
 
@@ -262,4 +266,3 @@ button.copy-ok:hover {
     z-index: 1;
     border: 1px solid #474747;
 }
-

@@ -16,9 +16,9 @@
 .heading {
   grid-column: 1 / 4;
   grid-row: 1;
-  h1 {
+  /*h1 {
     font-size: 1.2rem;
-  }
+  } */
 }
 
 input#custom-locators {

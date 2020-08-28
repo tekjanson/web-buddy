@@ -1,77 +1,162 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <title>Robotcorder</title>
-  <link async rel="stylesheet" type="text/css" href="../vendors/jquery-ui.min.css"/>
-  <link async rel="stylesheet" type="text/css" href="../assets/style.css">
-  <script src="../vendors/jquery-3.3.1.min.js"></script>
-  <script src="../vendors/jquery-ui.min.js"></script>
-  <script src="../vendors/clipboard-2.0.0.min.js"></script>
-</head>
+  <head>
+    <meta charset="utf-8" />
+    <title>Robotcorder</title>
+    <link
+      async
+      rel="stylesheet"
+      type="text/css"
+      href="../vendors/jquery-ui.min.css"
+    />
+    <link async rel="stylesheet" type="text/css" href="../assets/style.css" />
+    <script src="../vendors/jquery-3.3.1.min.js"></script>
+    <script src="../vendors/jquery-ui.min.js"></script>
+    <script src="../vendors/clipboard-2.0.0.min.js"></script>
+  </head>
 
-<body class="container" tabindex="-1">
-  <div class="padding">
-    <span>
-      <button class="btn btn-wide" id="record" tabindex="-1" title="record user action">
-        record
-      </button>
+  <body class="container" tabindex="-1">
+    <div class="padding">
+      <span>
+        <button
+          class="btn btn-wide"
+          id="record"
+          tabindex="-1"
+          title="record user action"
+        >
+          record
+        </button>
 
-      <button class="btn btn-wide" id="resume" tabindex="-1" title="resume with the recording">
-        resume
-      </button>
+        <button
+          class="btn btn-wide"
+          id="resume"
+          tabindex="-1"
+          title="resume with the recording"
+        >
+          resume
+        </button>
 
-      <button class="btn btn-wide" id="stop" tabindex="-1" title="stop the recording">
-        stop
-      </button>
+        <button
+          class="btn btn-wide"
+          id="stop"
+          tabindex="-1"
+          title="stop the recording"
+        >
+          stop
+        </button>
 
-      <button class="btn btn-wide" id="pause" tabindex="-1" title="pause the recording">
-        pause
-      </button>
+        <button
+          class="btn btn-wide"
+          id="pause"
+          tabindex="-1"
+          title="pause the recording"
+        >
+          pause
+        </button>
 
-      <button class="btn btn-wide" id="scan" tabindex="-1" title="scan entire page. might be slow">
-        scan
-      </button>
+        <button
+          class="btn btn-wide"
+          id="scan"
+          tabindex="-1"
+          title="scan entire page. might be slow"
+        >
+          scan
+        </button>
 
-      <button class="btn btn-wide" id="save" tabindex="-1" disabled title="download test script">
-        save
-      </button>
-    </span>
+        <button
+          class="btn btn-wide"
+          id="save"
+          tabindex="-1"
+          disabled
+          title="download test script"
+        >
+          save
+        </button>
 
-    <span class="btn-thin">
-      <button class="btn" id="copy" tabindex="-1" title="copy to clipboard" data-clipboard-target="#textarea-script"></button>
-      <button class="btn" id="settings" tabindex="-1" title="show/hide settings"></button>
-      <button class="btn" id="info" tabindex="-1" title="open instructions in another tab"></button>
-      <button class="btn" id="like" tabindex="-1" title="like me!"></button>
-    </span>
-  </div>
+        <button
+          class="btn btn-wide"
+          id="pom"
+          tabindex="-1"
+          title="open page object model file"
+        >
+          <!-- creates POM button-->
+          pom
+        </button>
+      </span>
 
-  <div id="settings-panel" class="pad hidden">
-    <div class="panel-row">
-      <span>Drag to reorder locators priority</span>
-      <ul id="sortable" class="ui-sortable"/>
+      <span class="btn-thin">
+        <button
+          class="btn"
+          id="copy"
+          tabindex="-1"
+          title="copy to clipboard"
+          data-clipboard-target="#textarea-script"
+        ></button>
+        <button
+          class="btn"
+          id="settings"
+          tabindex="-1"
+          title="show/hide settings"
+        ></button>
+        <button
+          class="btn"
+          id="info"
+          tabindex="-1"
+          title="open instructions in another tab"
+        ></button>
+        <button class="btn" id="like" tabindex="-1" title="like me!"></button>
+      </span>
     </div>
 
-    <div class="panel-row">
-      <div>
-        <input type="checkbox" id="demo" />
-        <label for="demo"> Add a 3s sleep after each action (for demo) </label>
+    <input id="findme" type="file" style="display: none" />
+    <div id="settings-panel" class="pad hidden">
+      <div class="panel-row">
+        <span>Drag to reorder locators priority</span>
+        <ul id="sortable" class="ui-sortable" />
       </div>
-      <div>
-        <input type="checkbox" id="verify" />
-        <label for="verify">Check page contains element before performing the action</label>
+
+      <div class="panel-row">
+        <div>
+          <input type="checkbox" id="demo" />
+          <label for="demo">
+            Add a 3s sleep after each action (for demo)
+          </label>
+        </div>
+        <div>
+          <input type="checkbox" id="verify" />
+          <label for="verify"
+            >Check page contains element before performing the action</label
+          >
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="pad">
-    <textarea id="textarea-script" tabindex="-1" readonly title="steps"></textarea>
-  </div>
+    <div class="pad">
+      <textarea
+        id="textarea-script"
+        tabindex="-1"
+        readonly
+        title="steps"
+      ></textarea>
+    </div>
 
-  <div class="pad">
-    <textarea class="hidden" id="textarea-log" tabindex="-1" readonly></textarea>
-  </div>
+    <div class="pad">
+      <textarea
+        class="hidden"
+        id="textarea-log"
+        tabindex="-1"
+        readonly
+      ></textarea>
+    </div>
 
-  <script src="popup.js"></script>
-</body>
+    <script src="popup.js"></script>
+    <div id="keywordDiv">
+      <!-- <input type="button"> </input> -->
+      <!-- <select id="keywordSelect">
+<option>
+  asdf
+</option>
+    </select> -->
+    </div>
+  </body>
 </html>
