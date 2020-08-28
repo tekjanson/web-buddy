@@ -91,7 +91,7 @@ function toggle(e) {
 
   if (e.target.id === "record") {
     show(["stop", "pause", "pom"], true);
-    show(["record", "resume", "scan", "pom"], false);
+    show(["record", "resume", "scan"], false);
     enable(["settings-panel"], false);
 
     $("#sortable").sortable("disable");
@@ -102,22 +102,22 @@ function toggle(e) {
 
     $("#sortable").sortable("disable");
   } else if (e.target.id === "resume") {
-    show(["pause", "stop"], true);
-    show(["record", "scan", "resume", "pom"], false);
+    show(["pause", "stop","pom"], true);
+    show(["record", "scan", "resume"], false);
     enable(["settings-panel"], false);
 
     $("#sortable").sortable("disable");
   } else if (e.target.id === "stop" || e.target.id === "scan") {
-    show(["record", "scan"], true); //add pom?
+    show(["record", "scan", "pom"], true); //add pom?
     show(["resume", "stop", "pause"], false);
     enable(["settings-panel"], true);
 
     $("#sortable").sortable("enable");
   } else if (e.target.id === "pom") {
     //added so only specific buttons will be available during the POM import
-    show(["record", "scan", "pom"], true);
-    show(["resume", "stop", "pause"], false);
-    enable(["settings-panel"], true);
+    // show(["record", "scan", "pom"], true);
+    // show(["resume", "stop", "pause"], false);
+    // enable(["settings-panel"], true);
   } else if (e.target.id === "settings") {
     analytics(["_trackEvent", "settings", "⚙️"]);
     document.getElementById("settings-panel").classList.toggle("hidden");
@@ -252,34 +252,34 @@ function like() {
   analytics(["_trackEvent", "like", "👍"]);
 }
 
-function pomSave() {
-  var ta = document.getElementById("tempDiv").getElementsByTagName("textarea");
-  var activities = document.getElementById("keywordSelect");
-  var index = activities.selectedIndex;
-  var arrGuments = [];
-  arrGuments.push(JSON.parse(activities.options[index].value).keyword);
-  for (let element of ta) {
-    arrGuments.push(element.value);
-  }
+// function pomSave() {
+//   var ta = document.getElementById("tempDiv").getElementsByTagName("textarea");
+//   var activities = document.getElementById("keywordSelect");
+//   var index = activities.selectedIndex;
+//   var arrGuments = [];
+//   arrGuments.push(JSON.parse(activities.options[index].value).keyword);
+//   for (let element of ta) {
+//     arrGuments.push(element.value);
+//   }
 
-  host.runtime.sendMessage({ operation: "pomer", results: arrGuments });
-}
+//   host.runtime.sendMessage({ operation: "pomer", results: arrGuments });
+// }
 
 document.addEventListener(
   "DOMContentLoaded",
   () => {
-    chrome.storage.local.get(/* String or Array */ ["pom"], function (items) {
-      //  items = [ { "phasersTo": "awesome" } ]
-      var arr = JSON.parse(items.pom);
-      var x = document.getElementById("keywordSelect");
+    // chrome.storage.local.get(/* String or Array */ ["pom"], function (items) {
+    //   //  items = [ { "phasersTo": "awesome" } ]
+    //   var arr = JSON.parse(items.pom);
+    //   var x = document.getElementById("keywordSelect");
 
-      for (let i = 0; i < arr.length; i++) {
-        var option = document.createElement("option");
-        option.text = arr[i].keyword;
-        option.value = JSON.stringify(arr[i]);
-        x.add(option);
-      }
-    });
+    //   for (let i = 0; i < arr.length; i++) {
+    //     var option = document.createElement("option");
+    //     option.text = arr[i].keyword;
+    //     option.value = JSON.stringify(arr[i]);
+    //     x.add(option);
+    //   }
+    // });
     var appendDiv = document.getElementById("keywordDiv");
 
     //     activities.addEventListener("onchange", function()

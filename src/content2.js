@@ -57,7 +57,8 @@ input.onchange = (e) => {
       //  Data's been saved boys and girls, go on home
     });
     // storage.set({ message: 'pom', opperation:  });
-    window.close();
+    // window.close();
+    load()
   };
   fr.readAsText(file);
 
@@ -79,65 +80,69 @@ function pomSave() {
   host.runtime.sendMessage({ operation: "pomer", results: arrGuments });
 }
 
-chrome.storage.local.get(/* String or Array */ ["pom"], function (items) {
-  //  items = [ { "phasersTo": "awesome" } ]
-  var arr = JSON.parse(items.pom);
-  var x = document.getElementById("keywordSelect");
+function load() {
+  chrome.storage.local.get(/* String or Array */ ["pom"], function (items) {
+    //  items = [ { "phasersTo": "awesome" } ]
+    var arr = JSON.parse(items.pom);
+    var x = document.getElementById("keywordSelect");
 
-  for (let i = 0; i < arr.length; i++) {
-    var option = document.createElement("option");
-    option.text = arr[i].keyword;
-    option.value = JSON.stringify(arr[i]);
-    x.add(option);
-  }
-
-  x.addEventListener("change", function (select) {
-    // chrome.storage.local.set({
-    //   message: 'record',
-    //   operation: 'record',
-    //   canSave: false,
-    // });
-    var appendDiv = document.getElementById("keywordDiv");
-    var killDiv = document.getElementById("tempDiv");
-    if (killDiv !== null) {
-      killDiv.remove();
+    for (let i = 0; i < arr.length; i++) {
+      var option = document.createElement("option");
+      option.text = arr[i].keyword;
+      option.value = JSON.stringify(arr[i]);
+      x.add(option);
     }
-    var tempDiv = document.createElement("div");
-    tempDiv.id = "tempDiv";
-    appendDiv.appendChild(tempDiv);
-    var activities = document.getElementById("keywordSelect");
 
-    var index = activities.selectedIndex;
-    var reObj = JSON.parse(activities.options[index].value);
-    for (let i = 0; i < reObj.arguments.number; i++) {
-      var btn = document.createElement("textarea"); // Create a <button> element
-      btn.id = `${reObj.keyword}-${i}`
-      // btn.innerText = `${reObj.arguments.types[i]}`; // Insert text
-      btn.value = `${reObj.arguments.types[i]}`; // Insert text
-      if (reObj.arguments.types[i] === "element") {
-        btn.addEventListener("click", (eventx) => {
-          host.runtime.sendMessage({ operation: "pomerSelect", btnId: `${reObj.keyword}-${i}` });
-        });
+    x.addEventListener("change", function (select) {
+      // chrome.storage.local.set({
+      //   message: 'record',
+      //   operation: 'record',
+      //   canSave: false,
+      // });
+      var appendDiv = document.getElementById("keywordDiv");
+      var killDiv = document.getElementById("tempDiv");
+      if (killDiv !== null) {
+        killDiv.remove();
       }
-      tempDiv.appendChild(btn); // Append <button> to <body>
-    }
-    var submitButton = document.createElement("input");
-    submitButton.type = "button";
-    submitButton.value = "submit";
-    submitButton.textContent = "submit";
-    tempDiv.appendChild(submitButton);
-    submitButton.addEventListener("click", pomSave);
+      var tempDiv = document.createElement("div");
+      tempDiv.id = "tempDiv";
+      appendDiv.appendChild(tempDiv);
+      var activities = document.getElementById("keywordSelect");
+
+      var index = activities.selectedIndex;
+      var reObj = JSON.parse(activities.options[index].value);
+      for (let i = 0; i < reObj.arguments.number; i++) {
+        var btn = document.createElement("textarea"); // Create a <button> element
+        btn.id = `${reObj.keyword}-${i}`;
+        // btn.innerText = `${reObj.arguments.types[i]}`; // Insert text
+        btn.value = `${reObj.arguments.types[i]}`; // Insert text
+        if (reObj.arguments.types[i] === "element") {
+          btn.addEventListener("click", (eventx) => {
+            console.log('asdfasdf')
+            host.runtime.sendMessage({
+              operation: "pomerSelect",
+              btnId: `${reObj.keyword}-${i}`,
+            });
+          });
+        }
+        tempDiv.appendChild(btn); // Append <button> to <body>
+      }
+      var submitButton = document.createElement("input");
+      submitButton.type = "button";
+      submitButton.value = "submit";
+      submitButton.textContent = "submit";
+      tempDiv.appendChild(submitButton);
+      submitButton.addEventListener("click", pomSave);
+    });
   });
-});
+}
 
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   if (request.msg === "element") {
     //  To do something
 
-    var btn = document.getElementById(request.data.elementState.request.btnId)
-    btn.value=request.data.request.script.path
+    var btn = document.getElementById(request.data.elementState.request.btnId);
+    btn.value = request.data.request.script.path;
     // btn.value = event.target;
-
-
   }
 });

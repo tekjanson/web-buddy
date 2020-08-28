@@ -53,6 +53,7 @@ function selection(item) {
 
 host.runtime.onMessage.addListener((request, sender, sendResponse) => {
   let { operation } = request;
+  console.log(operation)
   if (operation === "record") {
     icon.setIcon({ path: logo[operation] }); //sets robot icon
 
@@ -211,9 +212,13 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     host.tabs.create({ url });
   } else if (operation === "action") {
 
-
+console.log('asfdesxfdesxc',request)
     if (elementState.state === true){
-
+      elementState.state = false
+      icon.setIcon({ path: logo.pause });
+      setTimeout(() => {
+        icon.setIcon({ path: logo.record });
+      }, 1000);
      content.sendMessage(elementState.sender.tab.id, {
         msg: "element",
         data: {
@@ -221,9 +226,12 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
           elementState
         },
       });
+      request.script = null
+
     }
 
-    if (request.script) {
+    if (request.script) { 
+      console.log(request.script)
       selection(request.script);
       icon.setIcon({ path: logo[operation] });
       setTimeout(() => {

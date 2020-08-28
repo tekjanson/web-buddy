@@ -10,6 +10,8 @@
 
 1. Recording user actions
 2. Scanning the html page
+3. Mouse over, while recording press Alt+h to insert a hover over directly where you mouse currenty is
+4. Using Custom Keywords, if you need to have an element xpath as an argment you can click on the element textarea and then go back to your reocrd tab and use Alt+h to hover over the element to add its xpath to the selected textarea. hit submit to save that dynamic keyword to the robot script
 
 [Read more..](http://bit.ly/robotcorder-blog)
 
@@ -30,8 +32,6 @@ edit and update the locators
 6. The Robocorder extension will appear, ready to use
 
 
-## Contributing
-- Use branches, do not fork
 
 ## Change Log
 Refer to [CHANGELOG.md](http://bit.ly/robotcorder-changelog)
@@ -52,3 +52,9 @@ Refer to [Robotcorder-Page](https://sohwendy.github.io/Robotcorder-Page/) for in
 
 
 
+
+## Future work and known issues
+1. need a way to automatically source the keyword file in the robot script file
+2. bug with the recorder loosing focus on tab when interacting with POM popup, to get around this start recording before selecting your POM
+3. Add a way to run execute the dynamic POM, this will also be extremely helpful for debugging
+4. look into adding API testing
