@@ -7,6 +7,7 @@ const once = {
 };
 let elementState = {state: false};
 let list = [];
+let libSource =[];
 let script;
 const storage = host.storage.local;
 const content = host.tabs;
@@ -58,6 +59,8 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     icon.setIcon({ path: logo[operation] }); //sets robot icon
 
     content.query(tab, (tabs) => {
+      console.log(tabs)
+      if (tabs[0]) {
       [recordTab] = tabs;
       list = [
         {
@@ -72,6 +75,22 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
         operation,
         locators: request.locators,
       });
+    }
+    else {
+      console.log('went bad  with ',tabs)
+      // TODO need to save id and ignore the bad inputs, reset focus
+      storage.set({
+        locators: ["for", "name", "id", "title", "href", "class"],
+        operation: "stop",
+        message: error,
+        demo: false,
+        verify: false,
+        canSave: false,
+        isBusy: false,
+      });
+    }
+
+
     });
 
     storage.set({
@@ -88,6 +107,12 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     var scripts = request.results;
     var trigger = scripts[0];
     scripts.shift();
+    source = scripts.pop()
+    console.log(scripts)
+    console.log(source)
+    if (! libSource.includes(source)) {
+      libSource.push(source)
+    }
     var maker = {
       trigger,
       type: "pomer",
@@ -178,12 +203,13 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     script = translator.generateOutput(list, maxLength, demo, verify);
     content.query(tab, (tabs) => {
+      console.log(tabs)
       content.sendMessage(tabs[0].id, { operation: "stop" });
     });
 
     storage.set({ message: script, operation, canSave: true });
   } else if (operation === "save") {
-    const file = translator.generateFile(list, maxLength, demo, verify);
+    const file = translator.generateFile(list, maxLength, demo, verify, libSource);
     const blob = new Blob([file], { type: "text/plain;charset=utf-8" });
 
     host.downloads.download({

@@ -1,6 +1,7 @@
 *** Keywords ***
 Documentation
 ...               This file contains Keywords related to robot UI testing for XLR
+#sourceLocation:keywords.robot
 #robotcorder start
 #ARGS:2,string,string
 Login

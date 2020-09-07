@@ -153,7 +153,8 @@ function operation(e) {
     var popupWindow = window.open(
       chrome.extension.getURL("./src/background.html"),
       "exampleName",
-      "width=400,height=400"
+      "width=400,height=400",
+      "modal=yes"
     );
 
     // var input = document.createElement("input");

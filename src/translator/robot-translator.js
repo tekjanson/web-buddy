@@ -19,15 +19,20 @@ const translator = {
     return events.join('\n');
   },
 
-  generateFile(list, length, demo, verify) {
+  generateFile(list, length, demo, verify, source) {
     let events = this._generateEvents(list, length, demo, verify);
-
+    let libs = ''
+    for (var i = 0; i < source.length; i++) {
+      libs +=`\nLibrary           ${source[i]}`
+      //Do something
+    }
+  
     events = events.reduce((a, b) => `${a}    ${b}\n`, '');
-
     return '*** Settings ***'
       + `\nDocumentation     A test suite with a single test for ${list[0].title}`
       + "\n...               Created by hats' Robotcorderv2"
       + '\nLibrary           Selenium2Library    timeout=10'
+      + `\n${libs}`
       + '\n\n*** Variables ***'
       + '\n${BROWSER}    chrome'
       + '\n${SLEEP}    3'

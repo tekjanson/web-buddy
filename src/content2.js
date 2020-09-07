@@ -6,6 +6,7 @@ input.type = "file";
 
 input.onchange = (e) => {
   var file = e.target.files[0];
+  console.log(file,this)
   const name = file.name;
   const size = file.size;
   const type = file.type;
@@ -18,7 +19,13 @@ input.onchange = (e) => {
     var text = fr.result; //text from pom file
     const start = "#robotcorder start";
     const stop = "#robotcorder stop";
+    const source = "#sourceLocation:";
     const arr = [];
+    var mySourceString = text.substring(
+      text.indexOf(source) + source.length,
+      text.indexOf(start)
+    );
+    console.log(mySourceString)
     while (text.indexOf(stop) !== -1) {
       var mySubString = text.substring(
         text.indexOf(start) + start.length,
@@ -36,6 +43,7 @@ input.onchange = (e) => {
         arguments: {
           number: parseInt(just_args[0]),
           types: [],
+          sourecPath: mySourceString
         },
       };
       for (let j = 1; j < just_args.length; j++) {
@@ -127,6 +135,9 @@ function load() {
         }
         tempDiv.appendChild(btn); // Append <button> to <body>
       }
+      var sourceArea = document.createElement("textarea")
+      tempDiv.appendChild(sourceArea); // Append <button> to <body>; // Create a <button> element
+      sourceArea.value = reObj.arguments.sourecPath;
       var submitButton = document.createElement("input");
       submitButton.type = "button";
       submitButton.value = "submit";

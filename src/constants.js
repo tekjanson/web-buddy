@@ -29,3 +29,8 @@ const instruction = 'Robotcorder\n'
   + '\n'
   + '\n'
   + 'Automating test automation 🤗';
+
+
+  const error = 'Robotcorder\n'
+  + ' you have hit a error\n' 
+  + ' reset focus to a valid tab and start again';
