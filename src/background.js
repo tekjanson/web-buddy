@@ -55,6 +55,15 @@ function selection(item) {
 host.runtime.onMessage.addListener((request, sender, sendResponse) => {
   let { operation } = request;
   console.log(operation)
+  console.log(tab)
+  let back_tabs
+  storage.get({'default_tabs':'default_tabs',tabs:{}}, (backup_tab) => {
+    back_tabs = backup_tab.tabs[0]
+  })
+  // console.log(back_tabs)
+  // content.query(tab, (tabs) => {
+  //   console.log(tabs)
+  // })
   if (operation === "record") {
     icon.setIcon({ path: logo[operation] }); //sets robot icon
 
@@ -72,6 +81,21 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
         },
       ];
       content.sendMessage(tabs[0].id, {
+        operation,
+        locators: request.locators,
+      });
+    } else if (back_tabs) {
+      [recordTab] = [back_tabs];
+      list = [
+        {
+          type: "url",
+          path: recordTab.url,
+          time: 0,
+          trigger: "record",
+          title: recordTab.title,
+        },
+      ];
+      content.sendMessage(back_tabs.id, {
         operation,
         locators: request.locators,
       });
@@ -100,8 +124,7 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
   } else if (operation === "pause") {
     icon.setIcon({ path: logo.pause });
-
-    tabs[0].id,
+    back_tabs.id,
     storage.set({ operation: "pause", canSave: false, isBusy: false });
   } else if (operation === "pomer") {
     var scripts = request.results;
@@ -159,11 +182,19 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     icon.setIcon({ path: logo[operation] });
 
     content.query(tab, (tabs) => {
-      [recordTab] = tabs;
+      if (tabs[0]){
+        [recordTab] = tabs;
+
+      } else {
+        [recordTab] = [back_tabs]
+      }
+
       content.sendMessage(tabs[0].id, {
         operation,
         locators: request.locators,
       });
+
+
     });
 
     storage.set({
@@ -175,7 +206,11 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     icon.setIcon({ path: logo.action });
 
     content.query(tab, (tabs) => {
-      [recordTab] = tabs;
+      if(tabs[0]){
+        [recordTab] = tabs;
+      } else {
+        [recordTab] = [back_tabs]
+      }
       list = [
         {
           type: "url",
@@ -185,10 +220,18 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
           title: recordTab.title,
         },
       ];
-      content.sendMessage(tabs[0].id, {
-        operation,
-        locators: request.locators,
-      });
+      if (tabs[0]){
+        content.sendMessage(tabs[0].id, {
+          operation,
+          locators: request.locators,
+        });
+      } else {
+        content.sendMessage(back_tabs.id, {
+          operation,
+          locators: request.locators,
+        });
+      }
+
     });
 
     storage.set({
@@ -204,7 +247,11 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     script = translator.generateOutput(list, maxLength, demo, verify);
     content.query(tab, (tabs) => {
       console.log(tabs)
-      content.sendMessage(tabs[0].id, { operation: "stop" });
+      if(tabs[0]){
+        content.sendMessage(tabs[0].id, { operation: "stop" });
+      } else {
+        content.sendMessage(back_tabs.id, { operation: "stop" });
+      }
     });
 
     storage.set({ message: script, operation, canSave: true });

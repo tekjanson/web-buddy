@@ -410,3 +410,8 @@ host.storage.onChanged.addListener((changes, _) => {
     if (key === "message") display({ message: changes.message.newValue });
   }
 });
+
+host.tabs.query({ active: true, currentWindow: true }, tabs => {
+  console.log(tabs[0].title)
+  storage.set({ default_tabs: 'default_tab', tabs, canSave: false });
+})
