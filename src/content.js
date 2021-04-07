@@ -29,6 +29,7 @@ function handleByChange(type) {
 
 function recordChange(event) {
 
+
   const attr = scanner.parseNode(getTime(), event.target, strategyList);
 
   if (handleByChange(attr.type)) {
@@ -53,12 +54,14 @@ function recordKeydown(event) {
       }
     }
 }
+
 }
 
 
 function recordClick(event) {
 
   const attr = scanner.parseNode(getTime(), event.target, strategyList);
+
   if (!handleByChange(attr.type)) {
     Object.assign(attr, { trigger: 'click' });
     host.runtime.sendMessage({ operation: 'action', script: attr });

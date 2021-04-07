@@ -1,28 +1,31 @@
  
 /* global document $ chrome ClipboardJS */
 const debug = false;
-const gaAccount = 'UA-88380525-1';
-const version = '0.3.0';
+const gaAccount = "UA-88380525-1";
+const version = "0.3.0";
+const once = {
+  once : true
+};
 
 const host = chrome;
 const storage = host.storage.local;
 
 /*eslint-disable */
 var _gaq = _gaq || [];
-_gaq.push(['_setAccount', gaAccount]);
-_gaq.push(['_trackPageview']);
-(function() {
-  var ga = document.createElement('script');
-  ga.type = 'text/javascript';
+_gaq.push(["_setAccount", gaAccount]);
+_gaq.push(["_trackPageview"]);
+(function () {
+  var ga = document.createElement("script");
+  ga.type = "text/javascript";
   ga.async = true;
-  ga.src = 'https://ssl.google-analytics.com/ga.js';
-  var s = document.getElementsByTagName('script')[0];
+  ga.src = "https://ssl.google-analytics.com/ga.js";
+  var s = document.getElementsByTagName("script")[0];
   s.parentNode.insertBefore(ga, s);
 })();
 /* eslint-enable */
 
 function logger(data) {
-  if (debug) document.getElementById('textarea-log').value = data;
+  if (debug) document.getElementById("textarea-log").value = data;
 }
 
 function analytics(data) {
@@ -34,52 +37,59 @@ function analytics(data) {
   }
 }
 
-const clipboard = new ClipboardJS('#copy');
+const clipboard = new ClipboardJS("#copy");
 
 const copyStatus = (className) => {
-  $('#copy').addClass(className);
-  setTimeout(() => { $('#copy').removeClass(className); }, 3000);
+  $("#copy").addClass(className);
+  setTimeout(() => {
+    $("#copy").removeClass(className);
+  }, 3000);
 };
 
-clipboard.on('success', (e) => {
-  copyStatus('copy-ok');
-  analytics(['_trackEvent', 'copy', 'ok']);
+clipboard.on("success", (e) => {
+  copyStatus("copy-ok");
+  analytics(["_trackEvent", "copy", "ok"]);
 
   e.clearSelection();
 });
 
-clipboard.on('error', (e) => {
-  copyStatus('copy-fail');
-  analytics(['_trackEvent', 'copy', 'nok']);
+clipboard.on("error", (e) => {
+  copyStatus("copy-fail");
+  analytics(["_trackEvent", "copy", "nok"]);
   /* eslint-disable no-console */
-  console.error('Action:', e.action);
-  console.error('Trigger:', e.trigger);
+  console.error("Action:", e.action);
+  console.error("Trigger:", e.trigger);
   /* eslint-enable no-console */
 });
 
 function display(message) {
   if (message && message.message) {
-    const field = document.querySelector('#textarea-script');
-    field.value = message.message || '';
+    const field = document.querySelector("#textarea-script");
+    field.value = message.message || "";
   }
 }
 
 function show(array, visible) {
   array.forEach((id) => {
     const element = document.getElementById(id);
-    visible ? element.classList.remove('hidden') : element.classList.add('hidden');
+    visible
+      ? element.classList.remove("hidden")
+      : element.classList.add("hidden");
   });
 }
 
 function enable(array, isEnabled) {
   array.forEach((id) => {
     const element = document.getElementById(id);
-    isEnabled ? element.classList.remove('disabled') : element.classList.add('disabled');
+    isEnabled
+      ? element.classList.remove("disabled")
+      : element.classList.add("disabled");
   });
 }
 
 function toggle(e) {
   logger(e.target.id);
+
 
   if (e.target.id === 'record') {
     show(['stop', 'pause'], true);
@@ -114,20 +124,31 @@ function toggle(e) {
   } else if (e.target.id === 'settings') {
     analytics(['_trackEvent', 'settings', '⚙️']);
     document.getElementById('settings-panel').classList.toggle('hidden');
+
   }
 
-  if ((e.canSave === false) || (e.target.id === 'record')) {
-    document.getElementById('save').disabled = true;
-  } else if ((e.canSave === true) || (e.target.id === 'scan') || (e.target.id === 'stop')) {
-    document.getElementById('save').disabled = false;
+  if (e.canSave === false || e.target.id === "record") {
+    document.getElementById("save").disabled = true;
+  } else if (
+    e.canSave === true ||
+    e.target.id === "scan" ||
+    e.target.id === "stop"
+  ) {
+    document.getElementById("save").disabled = false;
   }
-  if (e.demo) { document.getElementById('demo').checked = e.demo; }
-  if (e.verify) { document.getElementById('verify').checked = e.verify; }
+  if (e.demo) {
+    document.getElementById("demo").checked = e.demo;
+  }
+  if (e.verify) {
+    document.getElementById("verify").checked = e.verify;
+  }
 }
 
 function busy(e) {
+
   if ((e.isBusy === true) || (e.isBusy === false)) {
     ['scan', 'record', 'stop', 'save', 'save', 'resume'].forEach((id) => {
+
       document.getElementById(id).disabled = e.isBusy; //add pom?
     });
   }
@@ -145,51 +166,178 @@ input.onchange = e => {
 
 input.click();
 	}
+
   toggle(e);
-  const locators = $('#sortable').sortable('toArray', { attribute: 'id' });
+  const locators = $("#sortable").sortable("toArray", { attribute: "id" });
   host.runtime.sendMessage({ operation: e.target.id, locators }, display);
 
-  analytics(['_trackEvent', e.target.id, '^-^']);
+  analytics(["_trackEvent", e.target.id, "^-^"]);
 }
 //some of the button stuff is here
 function settings(e) {
-  const locators = $('#sortable').sortable('toArray', { attribute: 'id' });
-  const demo = document.getElementById('demo').checked;
-  const verify = document.getElementById('verify').checked;
+  const locators = $("#sortable").sortable("toArray", { attribute: "id" });
+  const demo = document.getElementById("demo").checked;
+  const verify = document.getElementById("verify").checked;
   host.runtime.sendMessage({
-    operation: 'settings', locators, demo, verify
+    operation: "settings",
+    locators,
+    demo,
+    verify,
   });
-  analytics(['_trackEvent', 'setting', e.target.id]);
+  analytics(["_trackEvent", "setting", e.target.id]);
 }
 
 function info() {
-  host.runtime.sendMessage({ operation: 'info' });
+  host.runtime.sendMessage({ operation: "info" });
 
-  analytics(['_trackEvent', 'info', 'ℹ️']);
+  analytics(["_trackEvent", "info", "ℹ️"]);
 }
 
 function like() {
-  analytics(['_trackEvent', 'like', '👍']);
+  analytics(["_trackEvent", "like", "👍"]);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  storage.get({
-    message: 'Record or Scan',
-    operation: 'stop',
-    canSave: false,
-    isBusy: false,
-    demo: false,
-    verify: false,
-    locators: []
-  }, (state) => {
-    display({ message: state.message });
-    toggle({
-      target: { id: state.operation },
-      canSave: state.canSave,
-      isBusy: state.isBusy,
-      demo: state.demo,
-      verify: state.verify
+// function pomSave() {
+//   var ta = document.getElementById("tempDiv").getElementsByTagName("textarea");
+//   var activities = document.getElementById("keywordSelect");
+//   var index = activities.selectedIndex;
+//   var arrGuments = [];
+//   arrGuments.push(JSON.parse(activities.options[index].value).keyword);
+//   for (let element of ta) {
+//     arrGuments.push(element.value);
+//   }
+
+//   host.runtime.sendMessage({ operation: "pomer", results: arrGuments });
+// }
+
+document.addEventListener(
+  "DOMContentLoaded",
+  () => {
+    // chrome.storage.local.get(/* String or Array */ ["pom"], function (items) {
+    //   //  items = [ { "phasersTo": "awesome" } ]
+    //   var arr = JSON.parse(items.pom);
+    //   var x = document.getElementById("keywordSelect");
+
+    //   for (let i = 0; i < arr.length; i++) {
+    //     var option = document.createElement("option");
+    //     option.text = arr[i].keyword;
+    //     option.value = JSON.stringify(arr[i]);
+    //     x.add(option);
+    //   }
+    // });
+    var appendDiv = document.getElementById("keywordDiv");
+
+    //     activities.addEventListener("onchange", function()
+    $("#keywordSelect").change(function (select) {
+      var popupWindow = window.open(
+        chrome.extension.getURL("./src/background.html"),
+        "exampleName",
+        "width=400,height=400"
+      );
+  
+    //   var killDiv = document.getElementById("tempDiv");
+    //   if (killDiv !== null) {
+    //     killDiv.remove();
+    //   }
+    //   var tempDiv = document.createElement("div");
+    //   tempDiv.id = "tempDiv";
+    //   appendDiv.appendChild(tempDiv);
+    //   console.log(select);
+    //   var activities = document.getElementById("keywordSelect");
+
+    //   var index = activities.selectedIndex;
+    //   var reObj = JSON.parse(activities.options[index].value);
+    //   console.log(index, reObj, reObj.arguments.number);
+    //   for (let i = 0; i < reObj.arguments.number; i++) {
+    //     var btn = document.createElement("textarea"); // Create a <button> element
+    //     // btn.innerText = `${reObj.arguments.types[i]}`; // Insert text
+    //     btn.value = `${reObj.arguments.types[i]}`; // Insert text
+    //     if (reObj.arguments.types[i] === "element") {
+    //       btn.addEventListener("click", (eventx) => {
+    //         console.log(eventx)
+    //         document.addEventListener("keydown", (event) => {
+    //           if (event.key === "h") {
+    //             // case sensitive
+
+    //             document.addEventListener("mousemove", recordClickHover, once);
+    //             function recordClickHover(event) {
+    //               btn.value=event.target;
+    //               // const attr = scanner.parseNode(
+    //               //   getTime(),
+    //               //   event.target,
+    //               //   strategyList
+    //               // );
+    //               // attr.type = "hover";
+    //               // if (!handleByChange(attr.type)) {
+    //               //   Object.assign(attr, { trigger: "hover" });
+    //               //   host.runtime.sendMessage({
+    //               //     operation: "action",
+    //               //     script: attr,
+    //               //   });
+    //               // }
+    //             }
+    //           }
+    //         });
+    //       });
+    //     }
+    //     tempDiv.appendChild(btn); // Append <button> to <body>
+    //   }
+    //   var submitButton = document.createElement("input");
+    //   submitButton.type = "button";
+    //   submitButton.value = "submit";
+    //   submitButton.textContent = "submit";
+    //   tempDiv.appendChild(submitButton);
+    //   submitButton.addEventListener("click", pomSave);
     });
+    storage.get(
+      {
+        message: "Record or Scan",
+        operation: "stop",
+        canSave: false,
+        isBusy: false,
+        demo: false,
+        verify: false,
+        locators: [],
+      },
+      (state) => {
+        
+
+        display({ message: state.message });
+        toggle({
+          target: { id: state.operation },
+          canSave: state.canSave,
+          isBusy: state.isBusy,
+          demo: state.demo,
+          verify: state.verify,
+        });
+        setTimeout(() => {
+          const sortable = document.getElementById("sortable");
+          state.locators.forEach((locator) => {
+            const li = document.createElement("li");
+            li.appendChild(document.createTextNode(locator));
+            li.setAttribute("id", locator);
+            li.setAttribute("class", "ui-state-default");
+            sortable.appendChild(li);
+          });
+        }, 200);
+      }
+    );
+
+    debug
+      ? document.getElementById("textarea-log").classList.remove("hidden")
+      : 0;
+
+    ["record", "resume", "stop", "pause", "save", "scan", "pom"].forEach(
+      (id) => {
+        //add pom??
+        document.getElementById(id).addEventListener("click", operation);
+      }
+    );
+
+    ["demo", "verify"].forEach((id) => {
+      document.getElementById(id).addEventListener("change", settings);
+    });
+
     setTimeout(() => {
       const sortable = document.getElementById('sortable');
       state.locators.forEach((locator) => {
@@ -212,17 +360,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById(id).addEventListener('change', settings);
   });
 
-  document.getElementById('like').addEventListener('click', like);
-  document.getElementById('info').addEventListener('click', info);
-  document.getElementById('settings').addEventListener('click', toggle);
+    document.getElementById("like").addEventListener("click", like);
+    document.getElementById("info").addEventListener("click", info);
+    document.getElementById("settings").addEventListener("click", toggle);
 
-  $('#sortable').sortable({ update: settings });
-  $('#sortable').disableSelection();
-}, false);
+    $("#sortable").sortable({ update: settings });
+    $("#sortable").disableSelection();
+  },
+  false
+);
 
 host.storage.onChanged.addListener((changes, _) => {
   for (const key in changes) {
-    if (key === 'isBusy') busy({ isBusy: changes.isBusy.newValue });
-    if (key === 'message') display({ message: changes.message.newValue });
+    if (key === "isBusy") busy({ isBusy: changes.isBusy.newValue });
+    if (key === "message") display({ message: changes.message.newValue });
   }
 });

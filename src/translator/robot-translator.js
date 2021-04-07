@@ -38,12 +38,19 @@ const translator = {
   },
 
   _generatePath(attr) {
+    let path = ''
+    if (attr.type === 'pomer'){
+      path = attr.trigger
+      for( let i=0; i< attr.arguments.length; i++){
+        path += `    ${attr.arguments[i]} `
+      }
+    } else {
     const type = map[attr.type] || map.default;
-    let path = type.keyword;
+    path = type.keyword;
 
     path += attr.type === 'url' ? `    ${attr.path}    \${BROWSER}` : `    ${attr.path}`;
     path += attr.value && type.value ? `    ${attr.value}` : '';
-
+  }
     return path;
   },
 
