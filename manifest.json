@@ -8,7 +8,7 @@
   "background": {
     "scripts": [
       "./src/constants.js",
-      "./src/translator/robot-translator.js",
+      "./src/translator/cypress-translator.js",
       "./src/background.js"
     ],
     "persistent": true
