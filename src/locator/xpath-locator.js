@@ -23,7 +23,7 @@ const locator = {
     if (this._found(['@name'], path) && this._found(['select'], type)) return path;
 
     const { count, index } = this._getIndex(path, element);
-    return ((count > 1) && (index > 1)) ? `xpath=(${path})[${index}]` : path;
+    return ((count > 1) && (index > 1)) ? `(${path})[${index}]` : path;
   },
 
   _found(attributes, path) {
