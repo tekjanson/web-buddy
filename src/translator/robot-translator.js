@@ -12,76 +12,78 @@ const map = {
   default: { keyword: 'Click Element' }
 };
 
-const translator = {
-  generateOutput(list, length, demo, verify) {
-    const events = this._generateEvents(list, length, demo, verify);
+if (typeof translator === 'undefined') {
+  var translator = {
+    generateOutput(list, length, demo, verify) {
+      const events = this._generateEvents(list, length, demo, verify);
 
-    return events.join('\n');
-  },
+      return events.join('\n');
+    },
 
-  generateFile(list, length, demo, verify, source) {
-    let events = this._generateEvents(list, length, demo, verify);
-    let libs = ''
-    for (var i = 0; i < source.length; i++) {
-      libs +=`\nLibrary           ${source[i]}`
-      //Do something
-    }
-  
-    events = events.reduce((a, b) => `${a}    ${b}\n`, '');
-    return '*** Settings ***'
-      + `\nDocumentation     A test suite with a single test for ${list[0].title}`
-      + "\n...               Created by hats' Robotcorderv2"
-      + '\nLibrary           Selenium2Library    timeout=10'
-      + `\n${libs}`
-      + '\n\n*** Variables ***'
+    generateFile(list, length, demo, verify, source) {
+      const events = this._generateEvents(list, length, demo, verify) || [];
+      source = source || [];
+      // libs block: each source entry should be on its own line prefixed with Library
+      const libs = source.length ? `\n${source.map(s => `Library           ${s}`).join('\n')}` : '';
+
+      // eventsText: each event must be prefixed by 4 spaces when placed inside test
+      const eventsText = events.length ? `\n    ${events.join('\n    ')}\n` : '';
+
+      return `${'*** Settings ***'
+      + `\nDocumentation     A test suite with a single test for ${list && list[0] ? list[0].title : 'unnamed'}`
+      + "\n...               Created by hats' Robotcorder"
+      + '\nLibrary           Selenium2Library    timeout=10'}${
+        libs
+      }\n\n*** Variables ***`
       + '\n${BROWSER}    chrome'
       + '\n${SLEEP}    3'
       + '\n\n*** Test Cases ***'
-      + `\n${list[0].title} test`
-      + `\n${events}`
+      + `\n${list && list[0] ? list[0].title : 'unnamed'} test`
+      + `${eventsText}`
       + '\n    Close Browser';
-  },
+    },
 
-  _generatePath(attr) {
-    let path = ''
-    if (attr.type === 'pomer'){
-      path = attr.trigger
-      for( let i=0; i< attr.arguments.length; i++){
-        path += `    ${attr.arguments[i]} `
+    _generatePath(attr) {
+      let path = '';
+      if (attr.type === 'pomer') {
+        path = attr.trigger;
+        for (let i = 0; i < attr.arguments.length; i++) {
+          path += `    ${attr.arguments[i]} `;
+        }
+      } else {
+        const type = map[attr.type] || map.default;
+        path = type.keyword;
+
+        path += attr.type === 'url' ? `    ${attr.path}    \${BROWSER}` : `    ${attr.path}`;
+        path += attr.value && type.value ? `    ${attr.value}` : '';
       }
-    } else {
-    const type = map[attr.type] || map.default;
-    path = type.keyword;
+      return path;
+    },
 
-    path += attr.type === 'url' ? `    ${attr.path}    \${BROWSER}` : `    ${attr.path}`;
-    path += attr.value && type.value ? `    ${attr.value}` : '';
-  }
-    return path;
-  },
+    _generateDemo(demo) {
+      return demo ? map.demo.keyword : '';
+    },
 
-  _generateDemo(demo) {
-    return demo ? map.demo.keyword : '';
-  },
+    _generateVerify(attr, verify) {
+      return attr.path && verify ? `${map.verify.keyword}    ${attr.path}` : '';
+    },
 
-  _generateVerify(attr, verify) {
-    return attr.path && verify ? `${map.verify.keyword}    ${attr.path}` : '';
-  },
-
-  _generateEvents(list, length, demo, verify) {
-    let event = null;
-    const events = [];
-    for (let i = 0; i < list.length && i < length; i++) {
-      if (i > 0) {
-        event = this._generateVerify(list[i], verify);
+    _generateEvents(list, length, demo, verify) {
+      let event = null;
+      const events = [];
+      for (let i = 0; i < list.length && i < length; i++) {
+        if (i > 0) {
+          event = this._generateVerify(list[i], verify);
+          event && events.push(event);
+        }
+        event = this._generatePath(list[i]);
+        event && events.push(event);
+        event = this._generateDemo(demo);
         event && events.push(event);
       }
-      event = this._generatePath(list[i]);
-      event && events.push(event);
-      event = this._generateDemo(demo);
-      event && events.push(event);
+      return events;
     }
-    return events;
-  }
-};
+  };
+}
 
 if (typeof exports !== 'undefined') exports.translator = translator;

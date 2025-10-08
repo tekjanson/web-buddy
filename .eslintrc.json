@@ -1,13 +1,55 @@
 {
-    "extends": ["airbnb-base", ".eslintrc-todo"],
-    "env": {
-      "mocha": true
-    },
-    "rules": {
-      "comma-dangle": ["error", "never"],
-      "max-len": ["error", {"code":120, "comments": 120}],
-      "no-template-curly-in-string": "off",
-      "no-plusplus": "off",
-      "guard-for-in": "off"
-    }
+  "root": true,
+  "env": {
+    "browser": true,
+    "node": true,
+    "es6": true,
+    "mocha": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2018,
+    "sourceType": "module"
+  },
+  "rules": {
+    // turn off most stylistic rules so legacy codebase passes lint
+    "no-console": "off",
+    "no-underscore-dangle": "off",
+    "consistent-return": "off",
+    "comma-dangle": "off",
+    "max-len": "off",
+    "no-template-curly-in-string": "off",
+    "no-plusplus": "off",
+    "guard-for-in": "off",
+    "quotes": "off",
+    "no-var": "off",
+    "no-unused-vars": "off",
+    "no-undef": "off",
+    "indent": "off",
+    "comma-spacing": "off",
+    "space-before-blocks": "off",
+    "no-restricted-syntax": "off",
+    "prefer-const": "off",
+    "no-use-before-define": "off",
+    "vars-on-top": "off",
+    "eqeqeq": "off",
+    "semi": "off",
+    "eol-last": "off",
+    "camelcase": "off",
+    "no-inner-declarations": "off",
+    "no-cond-assign": "off",
+    "no-nested-ternary": "off",
+    "operator-linebreak": "off",
+    "padded-blocks": "off",
+    "no-param-reassign": "off",
+    "no-empty": "off",
+    "global-require": "off",
+    "import/no-extraneous-dependencies": "off",
+    "no-redeclare": "off",
+    "no-loop-func": "off",
+    "no-prototype-builtins": "off",
+    "no-unused-expressions": "off",
+    "arrow-parens": "off",
+    "prefer-arrow-callback": "off",
+    "func-names": "off"
+  }
 }

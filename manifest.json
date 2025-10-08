@@ -1,24 +1,25 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Robotcorder",
   "version": "0.4.0",
-  "homepage_url": "https://github.com/sohwendy/Robotcorder",
+  "homepage_url": "https://github.com/tekjanson/Robotcorder",
   "description": "A Robot that records user action and scans the page to generate RobotFramework test scripts (beta)",
-  "content_security_policy": "script-src 'self' https://ssl.google-analytics.com; object-src 'self'",
-  "background": {
-    "scripts": [
-      "./src/constants.js",
-      "./src/translator/cypress-translator.js",
-      "./src/background.js"
-    ],
-    "persistent": true
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   },
-  "options_page": "./src/options.html",
+  "background": {
+    "service_worker": "src/background-sw.js"
+  },
+  "options_ui": {
+    "page": "src/options.html",
+    "open_in_tab": true
+  },
   "content_scripts": [{
     "matches": [
       "<all_urls>"
     ],
     "js": [
+      "./src/logger.js",
       "./src/locator/xpath-locator.js",
       "./src/locator/tree-builder.js",
       "./src/locator/classifier.js",
@@ -28,7 +29,13 @@
     "run_at": "document_end",
     "all_frames": true
   }],
-  "browser_action": {
+  "web_accessible_resources": [
+    {
+      "resources": ["src/pom.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "action": {
     "default_icon": "assets/icon-stop.png",
     "default_popup": "src/popup.html"
   },
@@ -38,5 +45,6 @@
     "48": "assets/logo-48.png",
     "128": "assets/logo-128.png"
   },
-  "permissions": ["<all_urls>", "activeTab", "downloads", "storage"]
+  "permissions": ["activeTab", "downloads", "storage"],
+  "host_permissions": ["<all_urls>"]
 }

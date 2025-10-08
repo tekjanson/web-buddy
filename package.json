@@ -2,27 +2,29 @@
   "name": "robotcorder",
   "version": "0.4.0",
   "description": "A Robot that records user action and scans the page to generate RobotFramework test scripts (beta)",
-  "main": "src.background.js",
+  "main": "src/background.js",
   "directories": {
     "test": "test"
   },
   "scripts": {
-    "lint": "./node_modules/.bin/eslint .",
-    "lint-fix": "./node_modules/.bin/eslint . --fix",
-    "test-local": "./node_modules/mocha/bin/mocha  -r test/setup.js test/* --reporter nyan",
-    "test": "yarn run lint && yarn run test-local",
-    "export": "./script/export.command"
+    "lint": "eslint .",
+    "lint-fix": "eslint . --fix",
+    "test-local": "mocha -r test/setup.js test/* --reporter spec",
+    "test": "npm run lint && npm run test-local",
+    "export": "./script/export.command",
+    "build": "mkdir -p dist && zip -r dist/robotcorder.zip . -x node_modules/** -x .git/** -x dist/** -x docs/**",
+    "clean": "rm -rf dist node_modules"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sohwendy/Robotcorder.git"
+    "url": "git+https://github.com/tekjanson/Robotcorder.git"
   },
-  "author": "Wendy",
+  "author": "jamie levine <jamie.levine.phone@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/sohwendy/Robotcorder/issues"
+    "url": "https://github.com/tekjanson/Robotcorder/issues"
   },
-  "homepage": "https://github.com/sohwendy/Robotcorder#readme",
+  "homepage": "https://github.com/tekjanson/Robotcorder#readme",
   "devDependencies": {
     "chai": "^4.1.2",
     "eslint": "^5.0.0",
@@ -31,5 +33,12 @@
     "jsdom": "^11.12.0",
     "mocha": "^5.2.0",
     "sinon-chrome": "^2.3.2"
+  },
+  "dependencies": {
+    "mqtt": "^5.0.1"
+  }
+ ,
+  "engines": {
+    "node": ">=20"
   }
 }

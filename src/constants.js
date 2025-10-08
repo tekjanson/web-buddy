@@ -8,7 +8,7 @@ const logo = {
   scan: '/assets/icon-stop.png',
   action: '/assets/icon-action.png',
   pause: '/assets/icon-pause.png',
-  pom: '/assets/icon-stop.png' //changes robot icon
+  pom: '/assets/icon-stop.png' // changes robot icon
 };
 
 const filename = 'test_script.robot';
@@ -17,7 +17,7 @@ const statusMessage = {
   stop: 'Stopped',
   record: 'Recording action...',
   scan: 'Scanning html document...',
-  pom: 'Opening file explorer...'//message displayed after button was clicked
+  pom: 'Opening file explorer...'// message displayed after button was clicked
 };
 
 const instruction = 'Robotcorder\n'
@@ -31,6 +31,6 @@ const instruction = 'Robotcorder\n'
   + 'Automating test automation 🤗';
 
 
-  const error = 'Robotcorder\n'
-  + ' you have hit a error\n' 
+const error = 'Robotcorder\n'
+  + ' you have hit a error\n'
   + ' reset focus to a valid tab and start again';

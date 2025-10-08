@@ -15,7 +15,9 @@ const locator = {
       ),
       ''
     );
-    const path = `/${p}`;
+    // remove any leading slashes from subpath before prefixing with '//' to avoid '///'
+    const normalized = p.replace(/^\/+/, '');
+    const path = `//${normalized}`;
     // if there is no more elelments the path is done
     if (!element) return path;
     // if we have id or for or name the path is done
@@ -23,7 +25,7 @@ const locator = {
     if (this._found(['@name'], path) && this._found(['select'], type)) return path;
 
     const { count, index } = this._getIndex(path, element);
-    return ((count > 1) && (index > 1)) ? `(${path})[${index}]` : path;
+    return ((count > 1) && (index > 1)) ? `xpath=(${path})[${index}]` : path;
   },
 
   _found(attributes, path) {
@@ -46,12 +48,14 @@ const locator = {
   _getSubpath(subpath, attr, tag, hash) {
     if (attr.id != null) return `/${tag}[@id="${attr.id}"]`;
     if (attr.name != null) return `/${tag}[@name="${attr.name}"]`;
-    // added and reorded to include text search
-    if (hash.value != null && hash.type == "containsText") return `/${tag}[contains(text(), "${hash.value}")]`;
-    if (hash.value != null && hash.type == "parentContainsText" &&  (attr.class != null) && (attr.class.length > 0)) return `/${hash.parentTag.tagName.toLowerCase()}[contains(text(), "${hash.value}")]//../${tag}[@class="${attr.class}"]`;
-    if (hash.value != null && hash.type == "parentParentContainsText") return `/${tag}[contains(text(), "${hash.value}")]`;
-    
-    
+    // added and reordered to include text search (guard hash)
+    if (hash && hash.value != null && hash.type == 'containsText') return `/${tag}[contains(text(), "${hash.value}")]`;
+    if (hash && hash.value != null && hash.type == 'parentContainsText' && (attr.class != null) && (attr.class.length > 0)) {
+      const parentTagName = (hash.parentTag && hash.parentTag.tagName) ? hash.parentTag.tagName.toLowerCase() : '';
+      return `/${parentTagName}[contains(text(), "${hash.value}")]//../${tag}[@class="${attr.class}"]`;
+    }
+    if (hash && hash.value != null && hash.type == 'parentParentContainsText') return `/${tag}[contains(text(), "${hash.value}")]`;
+
     if ((attr.class != null) && (attr.class.length > 0)) return `/${tag}[@class="${attr.class}"]`;
     if (attr.for != null) return `/${tag}[@for="${attr.for}"]`;
     if (attr.title != null) return `/${tag}[@title="${attr.title}"]`;

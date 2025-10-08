@@ -1,0 +1,16 @@
+/* Service worker bootstrap for Manifest V3.
+   This imports the legacy background scripts so they run in the service worker context.
+   Keep this file minimal to avoid breaking the existing background logic.
+*/
+
+// import legacy scripts. These files should be plain scripts (no top-level DOM assumptions).
+try {
+  importScripts('./constants.js');
+  importScripts('./messages.js');
+  importScripts('./translator/cypress-translator.js');
+  importScripts('./translator/mqtt-translator.js');
+  importScripts('./translator/index.js');
+  importScripts('./background.js');
+} catch (e) {
+  console.error('Failed to import legacy background scripts in service worker:', e);
+}

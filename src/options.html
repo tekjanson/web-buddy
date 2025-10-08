@@ -2,7 +2,9 @@
 <html>
 
 <head>
+  <script src="./logger.js"></script>
   <script src="./options.js"></script>
+  <script src="./pom.js"></script>
   <link async rel="stylesheet" type="text/css" href="../assets/style.css">
   <link async rel="stylesheet" type="text/css" href="../assets/options.css">
 </head>
@@ -16,6 +18,48 @@
     <input type="text" id="custom-locators"/>
     <button class="btn btn-wide" id="reset">Reset</button>
     <button class="btn btn-wide" id="update">Update</button>
+  </div>
+</div>
+<div class="panel-options">
+  <div class="grid-container">
+    <div class="heading">
+      <h1>MQTT / Execution Policy</h1>
+      <div id="hint-policy">Control how MQTT/LLM commands are handled by the extension.</div>
+    </div>
+    <label for="mode">Default Mode</label>
+    <select id="mode">
+      <option value="suggestion">Suggestion (default)</option>
+      <option value="automatic">Automatic</option>
+    </select>
+
+    <label for="allowed-actions">Allowed actions (comma-separated)</label>
+    <input type="text" id="allowed-actions" />
+
+    <label for="per-test-type">Per test type (json)</label>
+    <input type="text" id="per-test-type" />
+
+    <button class="btn btn-wide" id="save-policy">Save Policy</button>
+  </div>
+</div>
+<div class="panel-options">
+  <div class="grid-container">
+    <div class="heading">
+      <h1>MQTT Broker</h1>
+      <div id="hint-broker">Configure MQTT broker (WebSocket) for local dev/testing.</div>
+    </div>
+    <label for="broker-url">Broker URL (wss:// or ws://)</label>
+    <input type="text" id="broker-url" />
+
+    <label for="client-id">Client ID</label>
+    <input type="text" id="client-id" />
+
+    <label for="username">Username (optional)</label>
+    <input type="text" id="username" />
+
+    <label for="password">Password (optional)</label>
+    <input type="password" id="password" />
+
+    <button class="btn btn-wide" id="save-broker">Save Broker</button>
   </div>
 </div>
 </body>
