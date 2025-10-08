@@ -29,6 +29,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('per-test-type').value = JSON.stringify(policy.per_test_type || {});
   });
 
+  // load output translator selection
+  storage.get({ output_translator: 'robot' }, (state) => {
+    const sel = document.getElementById('output-translator');
+    if (sel) sel.value = state.output_translator || 'robot';
+  });
+
+  const outputSel = document.getElementById('output-translator');
+  if (outputSel) {
+    outputSel.addEventListener('change', () => {
+      storage.set({ output_translator: outputSel.value || 'robot' });
+    });
+  }
+
   document.getElementById('save-policy').addEventListener('click', () => {
     const mode = document.getElementById('mode').value;
     const allowedActions = (document.getElementById('allowed-actions').value || '').split(',').map(s => s.trim()).filter(Boolean);

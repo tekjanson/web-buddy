@@ -1,7 +1,5 @@
 /* global document $ chrome ClipboardJS */
 const debug = false;
-const gaAccount = 'UA-88380525-1';
-const version = '0.3.0';
 const once = {
   once: true
 };
@@ -149,77 +147,8 @@ function busy(e) {
 
 function operation(e) {
   if (e.target.id === 'pom') {
-      const popupWindow = window.open(
-        $host.runtime.getURL('./src/background.html'),
-        'exampleName',
-        'width=400,height=400'
-      );
-
-    // var input = document.createElement("input");
-    // input.type = "file";
-
-    // input.onchange = (e) => {
-    //   var file = e.target.files[0];
-    //   console.log(file);
-    //   const name = file.name;
-    //   const size = file.size;
-    //   const type = file.type;
-    //   console.log(name, size, type);
-
-    //   var fr = new FileReader();
-
-    //   var text = fr.result; //text from pom file
-    //   console.log(text);
-
-    //   fr.onload = function (e) {
-    //     var text = fr.result; //text from pom file
-    //     //console.log(text);
-    //     const start = "#robotcorder start";
-    //     const stop = "#robotcorder stop";
-    //     const arr = [];
-    //     while (text.indexOf(stop) !== -1) {
-    //       var mySubString = text.substring(
-    //         text.indexOf(start) + start.length,
-    //         text.indexOf(stop)
-    //       );
-    //       text = text.substring(text.indexOf(stop) + stop.length, text.length);
-    //       //console.log(mySubString.substring(0, mySubString.indexOf("\n")));
-    //       const s = mySubString.split("\n");
-    //       var args_stuff = s[1];
-    //       var just_args = args_stuff
-    //         .substring(args_stuff.indexOf(":") +1, args_stuff.length)
-    //         .split(",");
-
-    //       console.log(just_args);
-    //       var obj_man = {
-    //         keyword: s[2],
-    //         arguments: {
-    //           number: parseInt(just_args[0]),
-    //           types: []
-    //         },
-    //       };
-    //       for (let j=1; j< just_args.length; j++){
-    //         obj_man.arguments.types.push(just_args[j])
-    //       }
-    //       arr.push(obj_man);
-    //       var x = document.getElementById("keywordSelect");
-    //       var option = document.createElement("option");
-    //       option.text = obj_man.keyword;
-    //       option.value = JSON.stringify(obj_man);
-    //       x.add(option);
-    //       /*arr.push(mySubString);
-    //                  console.log(mySubString)
-    //                  console.log("line"); */
-    //     }
-    //     console.log(arr); //adds pom stuff to the console
-    //     //need to get arr to print out within the extension though
-    //   };
-    //   fr.readAsText(file);
-
-    //   //storage.set({ message: text, operation, canSave: false }); */
-    // };
-
-    // input.click();
+    // Open the lightweight POM helper window (legacy UI)
+    window.open($host.runtime.getURL('./src/background.html'), 'pom-helper', 'width=400,height=400');
   }
   toggle(e);
   const locators = $('#sortable').sortable('toArray', { attribute: 'id' });
@@ -498,6 +427,31 @@ document.addEventListener(
         document.getElementById(id).addEventListener('click', operation);
       }
     );
+
+    // Run recorded steps in active tab
+    const runBtn = document.getElementById('run');
+    if (runBtn) {
+      runBtn.addEventListener('click', () => {
+        try {
+          storage.get({ last_actions: [] }, (s) => {
+            const list = s && Array.isArray(s.last_actions) ? s.last_actions : [];
+            if (!list || list.length === 0) {
+              alert('No recorded actions to run');
+              return;
+            }
+            // send run_translated to background with the recorded list
+            try {
+              $host.runtime.sendMessage({ operation: 'run_translated', list }, (resp) => {
+                const lastErr = $host.runtime && $host.runtime.lastError;
+                if (lastErr) {
+                  if (typeof rcLog !== 'undefined') rcLog('debug', 'run sendMessage lastError', lastErr.message);
+                }
+              });
+            } catch (e) { if (typeof rcLog !== 'undefined') rcLog('error', 'run sendMessage failed', e && e.message ? e.message : e); }
+          });
+        } catch (e) { alert('Failed to read recorded actions'); }
+      });
+    }
 
     ['demo', 'verify'].forEach((id) => {
       document.getElementById(id).addEventListener('change', settings);

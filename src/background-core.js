@@ -1,15 +1,16 @@
 /*
- * background.js
- * NOTE: This file contains legacy background logic originally written for
- * Manifest V2. The active MV3 service worker is `src/background-sw.js`.
- * We keep this file for compatibility and as a reference for larger refactors.
+ * background-core.js
+ * Central background controller used by the MV3 service worker bootstrap.
+ * This file contains the background orchestration logic (message handling,
+ * MQTT bridge initialization, recording/scan state, translators) and is
+ * intentionally kept as an importable plain script so the service worker can
+ * import it using importScripts().
  */
 
 /* global chrome URL Blob */
 
 // Provide a safe host shim so the file can be used in environments where
-// `chrome`/`browser` may not be present (tests, bundlers). In MV3 the
-// service worker in `background-sw.js` should be used instead.
+// `chrome`/`browser` may not be present (tests, bundlers).
 const host = (typeof chrome !== 'undefined') ? chrome : (typeof browser !== 'undefined' ? browser : {
   storage: { local: { get: () => {}, set: () => {}, onChanged: { addListener: () => {} } } },
   tabs: { query: () => {}, sendMessage: () => {}, executeScript: () => {} },
@@ -66,6 +67,29 @@ function injectContentScript(tabId, cb) {
     }
     host.scripting.executeScript({ target: { tabId }, files: ['src/content.js'] }).then(() => { if (typeof cb === 'function') cb(null); }).catch((err) => { if (typeof cb === 'function') cb(err); });
   } catch (e) { if (typeof cb === 'function') cb(e); }
+}
+
+// Try to ensure the content script is injected into a tab with retries.
+function ensureContentInjected(tabId, maxAttempts = 6, delay = 500) {
+  if (!tabId) return;
+  let attempts = 0;
+  const tryInject = () => {
+    attempts += 1;
+    bgDebug('ensureContentInjected: attempt', attempts, 'for tab', tabId);
+    injectContentScript(tabId, (err) => {
+      if (!err) {
+        bgDebug('ensureContentInjected: injection succeeded for tab', tabId);
+        return;
+      }
+      bgDebug('ensureContentInjected: injection attempt failed', attempts, err && err.message ? err.message : err);
+      if (attempts < maxAttempts) {
+        setTimeout(tryInject, delay);
+      } else {
+        bgDebug('ensureContentInjected: giving up after', attempts, 'attempts for tab', tabId);
+      }
+    });
+  };
+  tryInject();
 }
 
 function sendMessageToTabObj(tabObj, message) {
@@ -131,6 +155,7 @@ function sendMessageWithHandshake(tabObj, message, timeout = 300) {
   bgDebug('sendMessageWithHandshake start', tabObj.id, message);
   try {
     host.tabs.sendMessage(tabObj.id, { type: 'handshake' }, (resp) => {
+      bgDebug('handshake callback invoked for tab', tabObj.id, 'resp', resp);
       const lastErr = host.runtime && host.runtime.lastError;
       if (lastErr) {
         const msg = lastErr && lastErr.message ? lastErr.message : String(lastErr);
@@ -155,6 +180,7 @@ function sendMessageWithHandshake(tabObj, message, timeout = 300) {
         }
       } else if (resp && resp.pong) {
         replied = true;
+        bgDebug('handshake pong received for tab', tabObj.id);
         sendMessageToTabObj(tabObj, message);
       } else {
         console.info('handshake no pong response, storing pending for tab', tabObj.id);
@@ -183,12 +209,14 @@ function sendMessageWithHandshake(tabObj, message, timeout = 300) {
         const arr = s.pending_messages || [];
         arr.push({ tabId: tabObj.id, message, time: Date.now(), handshake: 'timeout' });
         storage.set({ pending_messages: arr });
+        bgDebug('handshake timeout persisted message preview', { tabId: tabObj.id, preview: (message && message.operation) ? message.operation : message });
       });
     }
   }, timeout);
 }
 
 function getTranslator() {
+  // Prefer the selected translator if available on globals
   try {
     bgDebug('getTranslator: selectedTranslator=', selectedTranslator, 'available translators=', (typeof translators !== 'undefined') ? Object.keys(translators) : null);
     if (typeof translators !== 'undefined') {
@@ -200,7 +228,9 @@ function getTranslator() {
       }
     }
   } catch (e) {}
+  // Fallback to any global translator (legacy)
   try { if (typeof translator !== 'undefined') return translator; } catch (e) {}
+  // Try the aggregated index (Node/CommonJS environment)
   try {
     const tindex = require('./translator/index.js');
     const tkeys = tindex && Object.keys(tindex);
@@ -212,6 +242,92 @@ function getTranslator() {
     }
   } catch (e) {}
   return { generateOutput() { return ''; }, generateFile() { return ''; } };
+}
+
+// Accept a recorded list and execute it in the active tab by converting to
+// canonical commands and sending them to the content script.
+function executeListInTab(list) {
+  try {
+    let executor = null;
+    try { executor = require('./executor'); } catch (e) { /* not in CommonJS */ }
+    if (!executor && typeof globalThis !== 'undefined' && globalThis.executor) executor = globalThis.executor;
+    if (!executor) { bgDebug('executeListInTab: no executor available'); return; }
+    const cmds = executor.generateCommands(list || []);
+    bgDebug('executeListInTab: generated commands', cmds && cmds.length);
+    getActiveTab((tabObj) => {
+      if (!tabObj) { bgDebug('executeListInTab: no active tab'); return; }
+      try {
+        // If there's a navigation in the command sequence, handle it from background
+        const navIndex = cmds.findIndex(c => c && c.action === 'navigate');
+        if (navIndex === -1) {
+          sendMessageWithHandshake(tabObj, { operation: 'execute_commands', commands: cmds });
+          return;
+        }
+
+        // Send commands before the navigation (if any)
+        const before = cmds.slice(0, navIndex);
+        const nav = cmds[navIndex];
+        const remaining = cmds.slice(navIndex + 1);
+
+        if (before && before.length) {
+          sendMessageWithHandshake(tabObj, { operation: 'execute_commands', commands: before });
+        }
+
+        // Perform navigation from background to ensure we can reattach and continue
+        try {
+          bgDebug('executeListInTab: background navigating to', nav && nav.value, 'for tab', tabObj.id);
+          // Use tabs.update to navigate the tab
+          try {
+            host.tabs.update(tabObj.id, { url: nav && nav.value });
+          } catch (e) {
+            // older APIs or shims may require different call shape
+            try { host.tabs.update({ tabId: tabObj.id, url: nav && nav.value }); } catch (ee) { bgDebug('tabs.update failed', ee); }
+          }
+
+          // After navigation request, proactively try to inject the content script until it attaches
+          try { ensureContentInjected(tabObj.id); } catch (e) { bgDebug('ensureContentInjected call failed', e); }
+
+          // Also listen for the tab to finish loading (status === 'complete') and then inject and send remaining commands.
+          try {
+            const tabIdToWatch = tabObj.id;
+            const onUpdated = (updatedTabId, changeInfo, tab) => {
+              try {
+                if (updatedTabId !== tabIdToWatch) return;
+                bgDebug('tabs.onUpdated: changeInfo', changeInfo, 'tab.url', tab && tab.url);
+                const status = (changeInfo && changeInfo.status) || null;
+                const newUrl = (changeInfo && changeInfo.url) || null;
+                if (status === 'complete' || (newUrl && newUrl === (nav && nav.value))) {
+                  bgDebug('tabs.onUpdated: tab loaded, injecting and sending remaining commands for tab', tabIdToWatch);
+                  try { injectContentScript(tabIdToWatch, () => { bgDebug('injectContentScript callback after tab update for', tabIdToWatch); }); } catch (e) { bgDebug('injectContentScript after update failed', e); }
+                  // give the content a short moment to register listeners and respond to handshake
+                  setTimeout(() => {
+                    try { sendMessageWithHandshake({ id: tabIdToWatch }, { operation: 'execute_commands', commands: remaining }, 1200); } catch (e) { bgDebug('sendMessageWithHandshake after update failed', e); }
+                  }, 1200);
+                  try { if (host.tabs && host.tabs.onUpdated && typeof host.tabs.onUpdated.removeListener === 'function') host.tabs.onUpdated.removeListener(onUpdated); } catch (e) { bgDebug('failed to remove onUpdated listener', e); }
+                }
+              } catch (e) { bgDebug('tabs.onUpdated handler failed', e); }
+            };
+            if (host.tabs && host.tabs.onUpdated && typeof host.tabs.onUpdated.addListener === 'function') {
+              bgDebug('adding tabs.onUpdated listener for tab', tabIdToWatch, 'nav.url', nav && nav.value);
+              host.tabs.onUpdated.addListener(onUpdated);
+            } else {
+              // fallback: try a short delayed send if onUpdated not available
+              setTimeout(() => { try { sendMessageWithHandshake({ id: tabIdToWatch }, { operation: 'execute_commands', commands: remaining }); } catch (e) { bgDebug('fallback sendMessageWithHandshake after nav failed', e); } }, 800);
+            }
+          } catch (e) { bgDebug('tabs.onUpdated setup failed', e); }
+
+          // Persist remaining commands keyed by tab id so we can resend after navigation
+          try {
+            storage.get({ pending_commands: {} }, (s) => {
+              const pending = s.pending_commands || {};
+              pending[tabObj.id] = { commands: remaining || [], time: Date.now() };
+              storage.set({ pending_commands: pending }, () => { bgDebug('executeListInTab: persisted pending commands for tab', tabObj.id, remaining && remaining.length, 'pending_preview', (remaining && remaining.slice ? remaining.slice(0,3) : remaining)); });
+            });
+          } catch (e) { bgDebug('failed to persist pending commands', e); }
+        } catch (e) { bgDebug('executeListInTab navigation failed', e); }
+      } catch (e) { bgDebug('executeListInTab sendMessage failed', e); }
+    });
+  } catch (e) { bgDebug('executeListInTab failed', e); }
 }
 
 function initMqttIfEnabled() {
@@ -345,6 +461,23 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
         storage.set({ attached_tabs: filtered, last_attached: payload });
       });
       bgDebug('content attached', payload);
+      // If we have pending commands for this tab (e.g., after a navigation), resend them now
+      try {
+        storage.get({ pending_commands: {} }, (s2) => {
+          const pending = s2.pending_commands || {};
+          const entry = pending[tabId];
+          if (entry && Array.isArray(entry.commands) && entry.commands.length) {
+            bgDebug('content attached: found pending commands for tab', tabId, entry.commands.length, 'preview', (entry.commands && entry.commands.slice ? entry.commands.slice(0,3) : entry.commands));
+            const tabObj = { id: tabId };
+            try {
+              sendMessageWithHandshake(tabObj, { operation: 'execute_commands', commands: entry.commands }, 1200);
+            } catch (e) { bgDebug('content attached: resend sendMessage failed', e); }
+            // clear pending for this tab
+            delete pending[tabId];
+            storage.set({ pending_commands: pending }, () => { bgDebug('content attached: cleared pending_commands for tab', tabId); });
+          }
+        });
+      } catch (e) { bgDebug('content attached: failed to check pending_commands', e); }
     } catch (e) { bgDebug('failed to persist attached state', e); }
     return;
   }
@@ -421,18 +554,27 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
   } else if (operation === 'stop') {
     recordTab = 0; icon.setIcon({ path: logo[operation] });
     bgDebug('stop: invoking translator.generateOutput with selectedTranslator=', selectedTranslator);
-    const genStop = getTranslator();
+    const gen = getTranslator();
     try {
-      script = genStop.generateOutput(list, maxLength, demo, verify);
+      script = gen.generateOutput(list, maxLength, demo, verify);
       bgDebug('stop: generated script length=', script && script.length);
-    } catch (e) { bgDebug('stop: translator.generateOutput threw', e); script = ''; }
+    } catch (e) {
+      bgDebug('stop: translator.generateOutput threw', e);
+      script = '';
+    }
     getActiveTab((tabObj) => { const t = tabObj || back_tabs; if (t) sendMessageWithHandshake(t, { operation: 'stop' }); }); storage.set({ message: script, operation, canSave: true });
     try { storage.set({ last_actions: list }); } catch (e) { bgDebug('failed to persist last_actions', e); }
   } else if (operation === 'save') {
     bgDebug('save: invoking translator.generateFile with selectedTranslator=', selectedTranslator);
     const genSave = getTranslator();
     let file;
-    try { file = genSave.generateFile(list, maxLength, demo, verify, libSource); bgDebug('save: generated file length=', file && file.length); } catch (e) { bgDebug('save: translator.generateFile threw', e); file = ''; }
+    try {
+      file = genSave.generateFile(list, maxLength, demo, verify, libSource);
+      bgDebug('save: generated file length=', file && file.length);
+    } catch (e) {
+      bgDebug('save: translator.generateFile threw', e);
+      file = '';
+    }
     const blob = new Blob([file], { type: 'text/plain;charset=utf-8' });
     try { if (typeof URL !== 'undefined' && host.downloads && host.downloads.download) { host.downloads.download({ url: URL.createObjectURL(blob, { oneTimeOnly: true }), filename }); } else throw new Error('downloads API or URL unavailable'); } catch (e) { const fileText = file; storage.set({ last_file: { filename, body: fileText, time: Date.now() } }); }
   } else if (operation == 'pom') {
@@ -646,6 +788,20 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
       }
     });
   }
+  else if (operation === 'run_translated') {
+    // Accept either a `list` (recorded attributes) or `commands` (already canonical)
+    // If canonical commands are provided, forward them to the active tab. If a
+    // recorded list is provided, convert using the executor.
+    try {
+      if (request.commands && Array.isArray(request.commands)) {
+        getActiveTab((tabObj) => { if (tabObj) sendMessageWithHandshake(tabObj, { operation: 'execute_commands', commands: request.commands }); });
+      } else if (request.list && Array.isArray(request.list)) {
+        executeListInTab(request.list);
+      } else {
+        bgDebug('run_translated: no commands or list provided');
+      }
+    } catch (e) { bgDebug('run_translated failed', e); }
+  }
   else if (operation === 'mqtt_status') {
     // return useful diagnostics for debugging MQTT
     try {
@@ -673,6 +829,19 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
   }
 });
 
+// Listen for execution results from content script and log them for debugging
+try {
+  host.runtime.onMessage.addListener((request = {}, sender) => {
+    try {
+      if (request && request.operation === 'execute_result') {
+        bgDebug('execute_result received from tab', sender && sender.tab && sender.tab.id, 'results', request.results);
+        // persist last execute result for debugging
+        try { storage.set({ last_execute_result: { tabId: (sender && sender.tab && sender.tab.id), results: request.results, time: Date.now() } }); } catch (e) { bgDebug('failed to persist last_execute_result', e); }
+      }
+    } catch (e) { /* noop */ }
+  });
+} catch (e) { bgDebug('failed to register execute_result listener', e); }
+
 // If a pinned popup window is closed externally, clear stored pinnedWindowId so popup UI updates correctly
 try {
   if (host && host.windows && host.windows.onRemoved) {
@@ -688,3 +857,5 @@ try {
     });
   }
 } catch (e) {}
+
+// Export nothing - this file is imported for its side effects when run via importScripts

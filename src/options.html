@@ -25,6 +25,13 @@
       <h1>MQTT / Execution Policy</h1>
       <div id="hint-policy">Control how MQTT/LLM commands are handled by the extension.</div>
     </div>
+    <label for="output-translator">Output Format (default: Cypress)</label>
+    <select id="output-translator">
+      <option value="robot">RobotFramework</option>
+      <option value="cypress">Cypress (default)</option>
+      <option value="playwright">Playwright</option>
+      <option value="selenium">Selenium (WebDriver)</option>
+    </select>
     <label for="mode">Default Mode</label>
     <select id="mode">
       <option value="suggestion">Suggestion (default)</option>

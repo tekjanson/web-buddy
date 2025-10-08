@@ -9,11 +9,15 @@ try {
   importScripts('./messages.js');
   importScripts('./translator/cypress-translator.js');
   importScripts('./translator/mqtt-translator.js');
+  importScripts('./translator/playwright-translator.js');
+  importScripts('./translator/selenium-translator.js');
   importScripts('./translator/index.js');
+  // executor (canonical command generator) must be loaded before background-core
+  importScripts('./executor.js');
   // Load a browser mqtt bundle first so mqtt global exists for mqtt/bridge.js
   importScripts('../vendors/mqtt.min.js');
   importScripts('./mqtt/bridge.js');
-  importScripts('./background.js');
+  importScripts('./background-core.js');
 } catch (e) {
   console.error('Failed to import legacy background scripts in service worker:', e);
 }

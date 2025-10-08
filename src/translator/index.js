@@ -8,9 +8,11 @@
   // Node / CommonJS environment: build aggregated export
   if (typeof module !== 'undefined' && module.exports) {
     const out = {};
-    try { out.robot = require('./robot-translator').translator; } catch (e) {}
-    try { out.cypress = require('./cypress-translator').translator; } catch (e) {}
-    try { out.mqtt = require('./mqtt-translator').translator; } catch (e) {}
+  try { out.robot = require('./robot-translator').translator; } catch (e) {}
+  try { out.cypress = require('./cypress-translator').translator; } catch (e) {}
+  try { out.mqtt = require('./mqtt-translator').translator; } catch (e) {}
+  try { out.playwright = require('./playwright-translator').translator; } catch (e) {}
+  try { out.selenium = require('./selenium-translator').translator; } catch (e) {}
     module.exports = out;
     return;
   }
