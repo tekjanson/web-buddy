@@ -1,93 +1,191 @@
 /* global document chrome scanner */
 
+// content.js - clearer, modular content script for Robotcorder
+// Responsibilities:
+// - Listen for start/stop/scan messages from the extension UI
+// - Record user actions (click, change, hover) using the locator `scanner`
+// - Forward recorded actions to the background script
+
 const host = chrome;
-let strategyList = [];
-const once = {
-  once : true
-};
-/*
-var observer = new MutationObserver(recordMutate);
-var config = { attributes: true, characterData: true, subtree: true, childList: true};
-var config = { attributes: true, characterData: true, subtree: true };
-childList: Set to true to observe additions and removals of the target node's child elements (including text nodes).
-attributes: Set to true if mutations to target's attributes are to be observed.
-characterData: Set to true if mutations to target's data are to be observed.
-subtree: Set to true if mutations to not just target, but also target's descendants are to be observed
-attributeOldValue: true if recording attributes is set to true and target's attribute value before the mutation
-characterDataOldValue: true if recording characterData is set to true and target's data before the mutation
-attributeFilter: true if observing an array of attribute local names (without namespace) if not all attribute mutations
-*/
-host.runtime.sendMessage({ operation: 'load' });
 
-function getTime() {
-  return new Date().getTime();
+let locatorStrategies = [];
+
+function now() {
+  return Date.now();
 }
 
-function handleByChange(type) {
-  return ['text', 'file', 'select'].some(n => type === n);
+function debugLog(...args) {
+  // Mirror to extension logger if available and always to console for local debugging
+  try {
+    if (typeof rcLog !== 'undefined') rcLog('debug', ...args);
+  } catch (e) {}
+  console.debug('[Robotcorder content]', ...args);
 }
 
-function recordChange(event) {
-
-
-  const attr = scanner.parseNode(getTime(), event.target, strategyList);
-
-  if (handleByChange(attr.type)) {
-    Object.assign(attr, { trigger: 'change' });
-    host.runtime.sendMessage({ operation: 'action', script: attr });
-  }
+function isChangeType(type) {
+  return ['text', 'file', 'select'].includes(type);
 }
-// i don't love this but i don't know how to do it better, even though there is.
-// place your cursor over the area you wish to hover then hit
-// alt+h. when you move your mouse again the element under it will be recorded
-function recordKeydown(event) {
-  
-  if (event.altKey  &&  event.key === "h") {  // case sensitive
 
-    document.addEventListener('mousemove', recordClickHover, once);
-    function recordClickHover(event) {
-    const attr = scanner.parseNode(getTime(), event.target, strategyList);
-      attr.type = "hover";
-      if (!handleByChange(attr.type)) {
-        Object.assign(attr, { trigger: 'hover' });
-        host.runtime.sendMessage({ operation: 'action', script: attr });
-      }
+function sendAction(scriptOrScripts) {
+  const payload = { operation: 'action', ...(Array.isArray(scriptOrScripts) ? { scripts: scriptOrScripts } : { script: scriptOrScripts }) };
+  debugLog('sending action payload', payload);
+  host.runtime.sendMessage(payload, (resp) => {
+    const lastErr = host.runtime && host.runtime.lastError;
+    if (lastErr) debugLog('sendAction lastError', lastErr && lastErr.message ? lastErr.message : lastErr);
+    else debugLog('sendAction delivered', resp);
+  });
+}
+
+function recordChange(e) {
+  try {
+    const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'text', value: e.target.value || null };
+    debugLog('recordChange parsed attr', attr);
+    // For change events, consider text/select/file types; fallback to 'text' when unsure
+    if (isChangeType(attr.type) || !attr.type) {
+      Object.assign(attr, { trigger: 'change' });
+      sendAction(attr);
     }
-}
-
-}
-
-
-function recordClick(event) {
-
-  const attr = scanner.parseNode(getTime(), event.target, strategyList);
-
-  if (!handleByChange(attr.type)) {
-    Object.assign(attr, { trigger: 'click' });
-    host.runtime.sendMessage({ operation: 'action', script: attr });
+  } catch (err) {
+    debugLog('recordChange parseNode error', err && err.message ? err.message : err);
   }
 }
 
-host.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.operation === 'record') {
-    strategyList = request.locators || [];
-    strategyList.push('index');
-    document.addEventListener('change', recordChange, true);
-    document.addEventListener('keydown', recordKeydown, true);
-    document.addEventListener('click', recordClick, true);
-  } else if (request.operation === 'stop') {
-    document.removeEventListener('change', recordChange, true);
-    document.removeEventListener('keydown', recordKeydown, true)
-    document.removeEventListener('click', recordClick, true);
-  } else if (request.operation === 'scan') {
-    strategyList = request.locators || [];
-    strategyList.push('index');
-    document.removeEventListener('change', recordChange, true);
-    document.removeEventListener('keydown', recordKeydown, true)
-    document.removeEventListener('click', recordClick, true);
+// Special hover recording: press Alt+H to record the element currently under the cursor
+function recordKeydown(e) {
+  if (e.altKey && e.key === 'h') {
+    // one-time mousemove listener to capture the element under the cursor
+    document.addEventListener('mousemove', function onMove(ev) {
+      const attr = scanner.parseNode(now(), ev.target, locatorStrategies);
+      attr.type = 'hover';
+      if (!isChangeType(attr.type)) {
+        Object.assign(attr, { trigger: 'hover' });
+        sendAction(attr);
+      }
+      document.removeEventListener('mousemove', onMove, true);
+    }, true);
+  }
+}
 
+function recordClick(e) {
+  try {
+    const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'click', value: null };
+    debugLog('recordClick parsed attr', { tag: e.target.tagName, id: e.target.id, classes: e.target.className, attr });
+    // Record clicks for all elements unless classifier says it's a change-only control
+    if (!isChangeType(attr.type)) {
+      Object.assign(attr, { trigger: 'click' });
+      sendAction(attr);
+    }
+  } catch (err) {
+    debugLog('recordClick parseNode error', err && err.message ? err.message : err);
+  }
+}
+
+// capture typing as input events so we record text changes live
+function recordInput(e) {
+  try {
+    const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'text', value: e.target.value || null };
+    debugLog('recordInput parsed attr', { tag: e.target.tagName, id: e.target.id, classes: e.target.className, attr });
+    if (isChangeType(attr.type) || e.inputType) {
+      Object.assign(attr, { trigger: 'input' });
+      // include the current value if available
+      if (typeof e.target.value !== 'undefined') attr.value = e.target.value;
+      sendAction(attr);
+    }
+  } catch (err) {
+    debugLog('recordInput parseNode error', err && err.message ? err.message : err);
+  }
+}
+
+function attachRecordingListeners() {
+  debugLog('attaching recording listeners');
+  document.addEventListener('change', recordChange, true);
+  document.addEventListener('keydown', recordKeydown, true);
+  document.addEventListener('click', recordClick, true);
+  document.addEventListener('input', recordInput, true);
+  try {
+    host.runtime.sendMessage({ operation: 'attached', locators: locatorStrategies });
+    debugLog('sent attached message to background');
+  } catch (e) { debugLog('failed to send attached message', e); }
+}
+
+function detachRecordingListeners() {
+  debugLog('detaching recording listeners');
+  document.removeEventListener('change', recordChange, true);
+  document.removeEventListener('keydown', recordKeydown, true);
+  document.removeEventListener('click', recordClick, true);
+  document.removeEventListener('input', recordInput, true);
+  try {
+    host.runtime.sendMessage({ operation: 'detached' });
+    debugLog('sent detached message to background');
+  } catch (e) { debugLog('failed to send detached message', e); }
+}
+
+// Handle messages from extension UI / background
+host.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  debugLog('content script received message', request, sender && sender.tab && sender.tab.id);
+
+  // Basic handshake response
+  if (request && request.type === 'handshake') {
+    debugLog('content script responding pong to handshake');
+    sendResponse({ pong: true });
+    return true;
+  }
+
+  if (request.operation === 'record') {
+    locatorStrategies = (request.locators || []).slice();
+    locatorStrategies.push('index');
+    attachRecordingListeners();
+    debugLog('received record operation, locatorStrategies', locatorStrategies);
+  } else if (request.operation === 'stop') {
+    detachRecordingListeners();
+    debugLog('received stop operation');
+  } else if (request.operation === 'scan') {
+    locatorStrategies = (request.locators || []).slice();
+    locatorStrategies.push('index');
+    detachRecordingListeners();
+    // scan the DOM and return discovered scripts
     scanner.limit = 1000;
-    const array = scanner.parseNodes([], document.body, strategyList);
-    host.runtime.sendMessage({ operation: 'action', scripts: array });
+    const scripts = scanner.parseNodes([], document.body, locatorStrategies);
+    sendAction(scripts);
   }
 });
+
+// Notify background we were injected (used for load state / handshake)
+host.runtime.sendMessage({ operation: 'load' });
+debugLog('content script loaded and sent initial load message');
+
+// Fallback: if the background has operation already set to 'record', attach listeners so we don't miss
+try {
+  host.storage.local.get({ operation: 'stop', locators: [] }, (state) => {
+    debugLog('storage state on load', state);
+    if (state && state.operation === 'record') {
+      locatorStrategies = (state.locators || []).slice();
+      locatorStrategies.push('index');
+      attachRecordingListeners();
+      debugLog('attached recording listeners based on storage.state.operation');
+    }
+  });
+} catch (e) {
+  debugLog('storage check failed on load', e && e.message ? e.message : e);
+}
+
+// Listen for operation changes from storage as an additional reliable signal
+try {
+  host.storage.onChanged.addListener((changes) => {
+    if (changes.operation) {
+      const op = changes.operation.newValue;
+      debugLog('storage operation changed to', op);
+      if (op === 'record') {
+        host.storage.local.get({ locators: [] }, (s) => {
+          locatorStrategies = (s.locators || []).slice();
+          locatorStrategies.push('index');
+          attachRecordingListeners();
+        });
+      } else if (op === 'stop') {
+        detachRecordingListeners();
+      }
+    }
+  });
+} catch (e) {
+  debugLog('failed to add storage.onChanged listener', e && e.message ? e.message : e);
+}

@@ -1,8 +1,8 @@
 # Robotcorder
 
-[![Greenkeeper badge](https://badges.greenkeeper.io/sohwendy/Robotcorder.svg)](https://greenkeeper.io/)
-[![Build Status](https://travis-ci.org/sohwendy/Robotcorder.svg?branch=master)](https://travis-ci.org/sohwendy/Robotcorder)
-[![Known Vulnerabilities](https://snyk.io/test/github/sohwendy/robotcorder/badge.svg?targetFile=package.json)](https://snyk.io/test/github/sohwendy/robotcorder?targetFile=package.json)
+[![Greenkeeper badge](https://badges.greenkeeper.io/tekjanson/Robotcorder.svg)](https://greenkeeper.io/)
+[![Build Status](https://travis-ci.org/tekjanson/Robotcorder.svg?branch=master)](https://travis-ci.org/tekjanson/Robotcorder)
+[![Known Vulnerabilities](https://snyk.io/test/github/tekjanson/robotcorder/badge.svg?targetFile=package.json)](https://snyk.io/test/github/tekjanson/robotcorder?targetFile=package.json)
 
 > A browser extension (beta) that generates [RobotFramework](http://robotframework.org/) test scripts
 
@@ -24,7 +24,7 @@ click on Extension options
 edit and update the locators
 
 ## How To Add The Extension
-1. Clone the repository (``` $ git clone https://github.com/tekjanson/Robotcorder.git ```)
+1. Clone the repository (``` $ git clone https://github.com/tekjanson/Robotcorder.git ```) 
 2. Once the reposityry has been cloned, go to chrome://extensions/
 3. In the upper right hand corner of the page, silde the toggle so that developer mode is ON
 4. Select "Load Unpack" 
@@ -39,7 +39,7 @@ Refer to [CHANGELOG.md](http://bit.ly/robotcorder-changelog)
 
 ## Github Pages
 Found in /docs.
-Refer to [Robotcorder-Page](https://sohwendy.github.io/Robotcorder-Page/) for instruction how to update github page.
+Refer to [Robotcorder-Page](https://tekjanson.github.io/Robotcorder-Page/) for instruction how to update github page.
 
 
 [![forthebadge](https://forthebadge.com/images/badges/made-with-javascript.svg)](https://forthebadge.com)
