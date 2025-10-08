@@ -98,6 +98,10 @@ function attachRecordingListeners() {
   document.addEventListener('keydown', recordKeydown, true);
   document.addEventListener('click', recordClick, true);
   document.addEventListener('input', recordInput, true);
+  try {
+    host.runtime.sendMessage({ operation: 'attached', locators: locatorStrategies });
+    debugLog('sent attached message to background');
+  } catch (e) { debugLog('failed to send attached message', e); }
 }
 
 function detachRecordingListeners() {
@@ -106,6 +110,10 @@ function detachRecordingListeners() {
   document.removeEventListener('keydown', recordKeydown, true);
   document.removeEventListener('click', recordClick, true);
   document.removeEventListener('input', recordInput, true);
+  try {
+    host.runtime.sendMessage({ operation: 'detached' });
+    debugLog('sent detached message to background');
+  } catch (e) { debugLog('failed to send detached message', e); }
 }
 
 // Handle messages from extension UI / background

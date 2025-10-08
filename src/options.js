@@ -61,6 +61,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('password').value = b.password || '';
   });
 
+  // load mqtt enabled flag
+  storage.get({ mqtt_enabled: false }, (state) => {
+    const enabled = state.mqtt_enabled || false;
+    const el = document.getElementById('mqtt-enabled');
+    if (el) el.checked = enabled;
+  });
+
   document.getElementById('save-broker').addEventListener('click', () => {
     const brokerUrl = document.getElementById('broker-url').value;
     const clientId = document.getElementById('client-id').value;
@@ -70,11 +77,64 @@ document.addEventListener('DOMContentLoaded', () => {
       brokerUrl, clientId, username, password
     };
     storage.set({ mqtt_broker: cfg }, () => {
-      const el = document.getElementById('hint-broker');
-      if (el) el.textContent = 'Broker settings saved';
-      setTimeout(() => { if (el) el.textContent = 'Configure MQTT broker (WebSocket) for local dev/testing.'; }, 1500);
+      // persist mqtt enabled flag too (default true when broker is saved)
+      const mqttEl = document.getElementById('mqtt-enabled');
+      const enabled = mqttEl ? !!mqttEl.checked : true;
+      storage.set({ mqtt_enabled: enabled });
+      const hintEl = document.getElementById('hint-broker');
+      if (hintEl) hintEl.textContent = 'Broker settings saved';
+      setTimeout(() => { if (hintEl) hintEl.textContent = 'Configure MQTT broker (WebSocket) for local dev/testing.'; }, 1500);
     });
   });
+
+  // Test connection button: quick WebSocket reachability check for broker
+  const testBtn = document.getElementById('test-broker');
+  const statusSpan = document.getElementById('broker-status');
+  if (testBtn) {
+    testBtn.addEventListener('click', () => {
+      const url = document.getElementById('broker-url').value;
+      if (!url) {
+        if (statusSpan) statusSpan.textContent = 'Enter broker URL first';
+        return;
+      }
+      if (statusSpan) statusSpan.textContent = 'Testing...';
+      // simple WebSocket check to see if broker accepts WS handshake
+      let ws;
+      let settled = false;
+      try {
+        ws = new WebSocket(url);
+      } catch (e) {
+        if (statusSpan) statusSpan.textContent = 'Invalid URL';
+        return;
+      }
+      const onOk = () => {
+        if (settled) return; settled = true;
+        try { ws.close(); } catch (e) {}
+        if (statusSpan) statusSpan.textContent = 'Connection OK';
+      };
+      const onFail = (msg) => {
+        if (settled) return; settled = true;
+        try { ws.close(); } catch (e) {}
+        if (statusSpan) statusSpan.textContent = `Failed: ${msg}`;
+      };
+      const timer = setTimeout(() => onFail('timeout'), 4000);
+      ws.addEventListener('open', () => { clearTimeout(timer); onOk(); });
+      ws.addEventListener('error', (ev) => { clearTimeout(timer); onFail('error'); });
+      ws.addEventListener('close', () => { clearTimeout(timer); if (!settled) onFail('closed'); });
+    });
+  }
+
+  // toggle mqtt enabled explicitly
+  const mqttToggle = document.getElementById('mqtt-enabled');
+  if (mqttToggle) {
+    mqttToggle.addEventListener('change', () => {
+      storage.set({ mqtt_enabled: !!mqttToggle.checked });
+    });
+  }
+
+  // Remote entry (Module Federation) support removed.
+  // The UI controls for remote/module-federation were intentionally removed.
+  // If you need to restore remote mounting in the future, re-add the code carefully.
 });
 
 if (typeof exports !== 'undefined') exports.update = update;

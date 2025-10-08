@@ -10,6 +10,9 @@ try {
   importScripts('./translator/cypress-translator.js');
   importScripts('./translator/mqtt-translator.js');
   importScripts('./translator/index.js');
+  // Load a browser mqtt bundle first so mqtt global exists for mqtt/bridge.js
+  importScripts('../vendors/mqtt.min.js');
+  importScripts('./mqtt/bridge.js');
   importScripts('./background.js');
 } catch (e) {
   console.error('Failed to import legacy background scripts in service worker:', e);

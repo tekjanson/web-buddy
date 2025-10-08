@@ -2,11 +2,10 @@
 <html>
 
 <head>
-  <script src="./logger.js"></script>
-  <script src="./options.js"></script>
-  <script src="./pom.js"></script>
-  <link async rel="stylesheet" type="text/css" href="../assets/style.css">
-  <link async rel="stylesheet" type="text/css" href="../assets/options.css">
+  <link rel="stylesheet" type="text/css" href="../assets/style.css">
+  <link rel="stylesheet" type="text/css" href="../assets/options.css">
+  <script defer src="../vendors/jquery-3.3.1.min.js"></script>
+  <script defer src="../vendors/jquery-ui.min.js"></script>
 </head>
 <body>
 <div class="panel-options">
@@ -50,6 +49,9 @@
     <label for="broker-url">Broker URL (wss:// or ws://)</label>
     <input type="text" id="broker-url" />
 
+  <label for="mqtt-enabled">Enable MQTT</label>
+  <input type="checkbox" id="mqtt-enabled" />
+
     <label for="client-id">Client ID</label>
     <input type="text" id="client-id" />
 
@@ -58,10 +60,24 @@
 
     <label for="password">Password (optional)</label>
     <input type="password" id="password" />
-
-    <button class="btn btn-wide" id="save-broker">Save Broker</button>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="btn btn-wide" id="save-broker">Save Broker</button>
+      <button class="btn btn-wide" id="test-broker">Test Connection</button>
+      <span id="broker-status" aria-live="polite" style="margin-left:8px;color:#333;font-size:0.95rem"></span>
+    </div>
   </div>
 </div>
+<div class="panel-options">
+  <div class="grid-container">
+    <div class="heading">
+      <h1>Remote Entry removed</h1>
+      <div id="hint-remote">Module Federation / remote mounting support has been removed from this build.</div>
+    </div>
+  </div>
+</div>
+  <script src="./logger.js"></script>
+  <script src="./options.js"></script>
+  <script src="./pom.js"></script>
 </body>
 
 </html>

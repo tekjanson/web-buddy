@@ -11,3 +11,5 @@ yarn-error.log*
 archive/
 *.zip
 node_modules/
+docs/mqtt-pattern.md
+docs/qms-mqtt-topics.md

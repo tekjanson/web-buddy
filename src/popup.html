@@ -18,6 +18,15 @@
   </head>
 
   <body class="container" tabindex="-1">
+    <style>
+      /* Modern 2040s styling touches */
+      body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; color:#0f172a; }
+      .btn { background:transparent; border-radius:8px; padding:8px 10px; border:1px solid rgba(15,23,42,0.08); cursor:pointer; transition:transform .06s ease, box-shadow .06s ease; }
+      .btn:hover { transform:translateY(-1px); box-shadow:0 6px 18px rgba(12,34,80,0.08); }
+      .btn-wide { padding:8px 14px; border-radius:10px; }
+      textarea { border:1px solid rgba(15,23,42,0.06); border-radius:8px; padding:10px; font-size:13px; background: #fbfdff; }
+      #textarea-script { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace; }
+    </style>
     <div class="padding">
       <span>
         <button
@@ -94,6 +103,8 @@
           title="copy to clipboard"
           data-clipboard-target="#textarea-script"
         ></button>
+        <button class="btn" id="open-options" tabindex="-1" title="open options"></button>
+          <button class="btn" id="pin" tabindex="-1" title="pin window (keep open)"></button>
         <button
           class="btn"
           id="settings"
@@ -140,6 +151,29 @@
         readonly
         title="steps"
       ></textarea>
+    </div>
+    <div class="pad">
+      <div id="mqtt-status" class="small muted">MQTT: unknown</div>
+    </div>
+
+    <div class="pad">
+      <style>
+        /* Simple modern chat styles */
+        #chat-window { background: linear-gradient(180deg,#f6f8fb,#eef4fb); border-radius:12px; padding:12px; max-height:220px; overflow:auto; display:flex; flex-direction:column; gap:8px; }
+        .chat-bubble { max-width:85%; padding:10px 14px; border-radius:16px; box-shadow:0 2px 6px rgba(10,10,20,0.06); font-size:13px; line-height:1.4; }
+        .chat-user { align-self:flex-end; background:linear-gradient(90deg,#4f46e5,#7c3aed); color:#fff; border-bottom-right-radius:6px; }
+        .chat-assistant { align-self:flex-start; background:#fff; color:#111; border-bottom-left-radius:6px; }
+        .chat-meta { font-size:11px; color:#7b8093; margin-top:4px; }
+      </style>
+
+      <label for="chat-input">AI Chat</label>
+      <div id="chat-window" aria-live="polite" role="log"></div>
+      <textarea id="chat-input" placeholder="Ask the AI..." rows="3"></textarea>
+      <div>
+        <button class="btn btn-wide" id="chat-send">Send</button>
+      </div>
+      <div id="chat-response" class="pad small muted">No response yet</div>
+      <pre id="chat-raw" class="pad small muted hidden" style="max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-word;"></pre>
     </div>
 
     <div class="pad">

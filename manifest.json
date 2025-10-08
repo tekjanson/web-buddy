@@ -5,7 +5,7 @@
   "homepage_url": "https://github.com/tekjanson/Robotcorder",
   "description": "A Robot that records user action and scans the page to generate RobotFramework test scripts (beta)",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
+    "extension_pages": "script-src 'self' http://localhost:1234 http://127.0.0.1:1234; object-src 'self'"
   },
   "background": {
     "service_worker": "src/background-sw.js"

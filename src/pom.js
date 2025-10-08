@@ -5,7 +5,9 @@
 // - Provide a small API to initialize POM import button and keyword select UI
 // - Persist parsed POM data to chrome.storage and notify background when user selects
 
-const host = chrome;
+// Use a private host reference to avoid colliding with other scripts that may
+// declare a global `host` constant (options/popup load multiple helpers).
+const _host = (typeof host !== 'undefined') ? host : (typeof chrome !== 'undefined' ? chrome : undefined);
 
 function parsePomText(text) {
   const start = '#robotcorder start';
@@ -39,7 +41,8 @@ function parsePomText(text) {
 
 function savePomToStorage(parsedArr) {
   try {
-    host.storage.local.set({ pom: JSON.stringify(parsedArr) });
+    if (!_host) throw new Error('no host available');
+    _host.storage.local.set({ pom: JSON.stringify(parsedArr) });
   } catch (e) {
     if (typeof rcLog !== 'undefined') rcLog('error', 'failed to save pom', e);
   }
@@ -75,6 +78,7 @@ function initPomUI() {
     const keywordDiv = document.getElementById('keywordDiv');
     if (!keywordDiv) return;
 
+    // create hidden file input for uploading POM files
     const input = createHiddenFileInput(() => loadPom());
 
     function pomSave() {
@@ -85,11 +89,12 @@ function initPomUI() {
       const arrGuments = [];
       arrGuments.push(JSON.parse(activities.options[index].value).keyword);
       if (ta) for (const element of ta) arrGuments.push(element.value);
-      host.runtime.sendMessage({ operation: 'pomer', results: arrGuments });
+      if (_host) _host.runtime.sendMessage({ operation: 'pomer', results: arrGuments });
     }
 
     function loadPom() {
-      host.storage.local.get(['pom'], (items) => {
+      if (!_host) return;
+      _host.storage.local.get(['pom'], (items) => {
         const arr = (items && items.pom) ? JSON.parse(items.pom) : [];
         const x = document.getElementById('keywordSelect');
         if (!x) return;
@@ -118,8 +123,7 @@ function initPomUI() {
             btn.value = `${reObj.arguments.types[i] || ''}`;
             if (reObj.arguments.types[i] === 'element') {
               btn.addEventListener('click', () => {
-                if (typeof rcLog !== 'undefined') rcLog('info', 'pomerSelect requested', `${reObj.keyword}-${i}`);
-                host.runtime.sendMessage({ operation: 'pomerSelect', btnId: `${reObj.keyword}-${i}` });
+                if (_host) _host.runtime.sendMessage({ operation: 'pomerSelect', btnId: `${reObj.keyword}-${i}` });
               });
             }
             tempDiv.appendChild(btn);
@@ -130,7 +134,6 @@ function initPomUI() {
           const submitButton = document.createElement('input');
           submitButton.type = 'button';
           submitButton.value = 'submit';
-          submitButton.textContent = 'submit';
           tempDiv.appendChild(submitButton);
           submitButton.addEventListener('click', pomSave);
         });
@@ -141,16 +144,18 @@ function initPomUI() {
     loadPom();
 
     // listener for element messages (from background when user selects element)
-    host.runtime.onMessage.addListener((request) => {
-      if (request && request.msg === 'element') {
-        try {
-          const btn = document.getElementById(request.data.elementState.request.btnId);
-          if (btn) btn.value = request.data.request.script.path;
-        } catch (e) {
-          if (typeof rcLog !== 'undefined') rcLog('error', 'failed to apply element message', e);
+    if (_host) {
+      _host.runtime.onMessage.addListener((request) => {
+        if (request && request.msg === 'element') {
+          try {
+            const btn = document.getElementById(request.data.elementState.request.btnId);
+            if (btn) btn.value = request.data.request.script.path;
+          } catch (e) {
+            if (typeof rcLog !== 'undefined') rcLog('error', 'failed to apply element message', e);
+          }
         }
-      }
-    });
+      });
+    }
   } catch (e) {
     if (typeof rcLog !== 'undefined') rcLog('error', 'POM migration init error', e);
   }
@@ -171,3 +176,36 @@ try {
 } catch (e) {
   // ignore in non-browser / test environments
 }
+
+
+// Remote entry loader: loads a remoteEntry.js URL stored in chrome.storage.local.remote_entry_url
+// Module Federation / Remote entry support removed.
+// No runtime remote-loading helpers are provided in this build. We keep
+// small no-op stubs on window.RobotcorderPom to avoid caller errors.
+window.RobotcorderPom = Object.assign(window.RobotcorderPom || {}, {});
+
+// Helper: build nested Providers from exported module contexts
+// React rendering support removed: Robotcorder will no longer attempt to create
+// React Provider trees or render React components. Remainings of Module
+// Federation mounting will call exposed modules as plain mount/render
+// functions (signature: mount(target, mountProps) or render(target, mountProps)).
+
+// React rendering removed. If an exposed module is a plain function it will be
+// invoked with (target, mountProps). If it provides a `.mount` method it will
+// be called with (target, mountProps). No UMD React will be injected anymore.
+
+// mountFederated: A best-effort helper that reads the configured remote container and exposed
+// module from storage and attempts to initialize Module Federation container and render into
+// an element with id 'remote-root'. It expects the remote to expose an init and the module.
+// Usage: RobotcorderPom.mountFederated(callback)
+// removed mountFederated
+
+// autodiscoverExposes: probe ESM remote and container for candidate expose names
+// removed autodiscoverExposes
+
+// mountFederatedWith: explicit mount for a container name and expose path
+// removed mountFederatedWith
+
+// Auto-load + auto-mount remoteEntry by default when this helper is present in a page.
+// Respects stored `remote_entry_url` and `remote_auto_mount` flag (defaults to true).
+// auto-load removed

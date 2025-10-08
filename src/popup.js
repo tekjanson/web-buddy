@@ -22,6 +22,22 @@ function analytics(/* data */) {
   // no-op: analytics removed
 }
 
+// Chat render helpers
+function renderChatMessage(who, text) {
+  try {
+    const win = document.getElementById('chat-window');
+    if (!win) return;
+    const bubble = document.createElement('div');
+    bubble.classList.add('chat-bubble');
+    bubble.classList.add(who === 'user' ? 'chat-user' : 'chat-assistant');
+    bubble.textContent = text;
+    win.appendChild(bubble);
+    // keep last ~50 messages visible
+    while (win.children.length > 50) win.removeChild(win.children[0]);
+    win.scrollTop = win.scrollHeight;
+  } catch (e) { console.warn('renderChatMessage failed', e); }
+}
+
 const clipboard = new ClipboardJS('#copy');
 
 const copyStatus = (className) => {
@@ -133,12 +149,11 @@ function busy(e) {
 
 function operation(e) {
   if (e.target.id === 'pom') {
-    const popupWindow = window.open(
-      chrome.extension.getURL('./src/background.html'),
-      'exampleName',
-      'width=400,height=400',
-      'modal=yes'
-    );
+      const popupWindow = window.open(
+        $host.runtime.getURL('./src/background.html'),
+        'exampleName',
+        'width=400,height=400'
+      );
 
     // var input = document.createElement("input");
     // input.type = "file";
@@ -304,7 +319,7 @@ document.addEventListener(
     //     activities.addEventListener("onchange", function()
     $('#keywordSelect').change((select) => {
       const popupWindow = window.open(
-        chrome.extension.getURL('./src/background.html'),
+        $host.runtime.getURL('./src/background.html'),
         'exampleName',
         'width=400,height=400'
       );
@@ -399,6 +414,76 @@ document.addEventListener(
       ? document.getElementById('textarea-log').classList.remove('hidden')
       : 0;
 
+    // Options opener and MQTT status
+    const openOptionsBtn = document.getElementById('open-options');
+    if (openOptionsBtn) {
+      openOptionsBtn.addEventListener('click', () => {
+        // open options page in a new tab
+        try { $host.runtime.openOptionsPage(); } catch (e) { $host.tabs.create({ url: $host.runtime.getURL('src/options.html') }); }
+      });
+      // add a visible label if button has no content (icon-only themes)
+      if (!openOptionsBtn.textContent || openOptionsBtn.textContent.trim() === '') openOptionsBtn.textContent = 'Options';
+    }
+
+    // Pin/Unpin window button
+    const pinBtn = document.getElementById('pin');
+    function updatePinUi(pinned) {
+      if (!pinBtn) return;
+      pinBtn.textContent = pinned ? 'Unpin' : 'Pin';
+      pinBtn.title = pinned ? 'unpin window (close pinned window)' : 'pin window (keep open)';
+    }
+
+    // fetch pinnedWindowId from storage and update UI
+    try {
+      storage.get({ pinnedWindowId: null }, (s) => {
+        updatePinUi(!!(s && s.pinnedWindowId));
+      });
+    } catch (e) { /* ignore */ }
+
+    if (pinBtn) {
+      pinBtn.addEventListener('click', async () => {
+        try {
+          storage.get({ pinnedWindowId: null }, async (s) => {
+            const winId = s && s.pinnedWindowId;
+            if (winId) {
+              // unpin: try to remove/close the pinned window
+              try {
+                await new Promise((res) => $host.windows.remove(winId, () => res()));
+              } catch (e) {
+                // ignore if window already closed
+              }
+              storage.set({ pinnedWindowId: null });
+              updatePinUi(false);
+            } else {
+              // pin: create a new window showing the popup page (open as a popup window)
+              const url = $host.runtime.getURL('src/popup.html');
+              try {
+                $host.windows.create({ url, type: 'popup', width: 420, height: 640 }, (created) => {
+                  if (created && created.id) {
+                    storage.set({ pinnedWindowId: created.id });
+                    updatePinUi(true);
+                  }
+                });
+              } catch (e) {
+                // some platforms may disallow windows.create from a popup; fallback to opening a tab
+                try { $host.tabs.create({ url }); } catch (err) {}
+              }
+            }
+          });
+        } catch (e) { console.warn('pin handler error', e); }
+      });
+    }
+
+    // Show mqtt status (enabled/disabled + broker url)
+    try {
+      storage.get({ mqtt_enabled: false, mqtt_broker: {} }, (s) => {
+        const st = s.mqtt_enabled ? 'enabled' : 'disabled';
+        const url = (s.mqtt_broker && s.mqtt_broker.brokerUrl) ? s.mqtt_broker.brokerUrl : 'no broker';
+        const el = document.getElementById('mqtt-status');
+        if (el) el.textContent = `MQTT: ${st} — ${url}`;
+      });
+    } catch (e) { if (typeof rcLog !== 'undefined') rcLog('error', 'failed to read mqtt status', e && e.message ? e.message : e); }
+
     ['record', 'resume', 'stop', 'pause', 'save', 'scan', 'pom'].forEach(
       (id) => {
         // add pom??
@@ -413,6 +498,106 @@ document.addEventListener(
     document.getElementById('like').addEventListener('click', like);
     document.getElementById('info').addEventListener('click', info);
     document.getElementById('settings').addEventListener('click', toggle);
+
+      // Chat send handler
+      const chatSend = document.getElementById('chat-send');
+      if (chatSend) {
+        chatSend.addEventListener('click', () => {
+          const input = document.getElementById('chat-input');
+          const respDiv = document.getElementById('chat-response');
+          if (!input || !respDiv) return;
+          const text = input.value && input.value.trim();
+          if (!text) {
+            respDiv.textContent = 'Please enter a message';
+            return;
+          }
+
+          respDiv.textContent = 'Sending...';
+
+              // send chat request to background and await reply
+              try {
+                // read last context tokenId from storage and include it
+                storage.get({ chat_context: null }, (s) => {
+                  const ctx = s && s.chat_context ? s.chat_context : null;
+                  const outgoing = { operation: 'chat', input: text, context: ctx };
+                  // render user bubble immediately
+                  renderChatMessage('user', text);
+
+                  $host.runtime.sendMessage(outgoing, (reply) => {
+              const lastErr = $host.runtime && $host.runtime.lastError;
+              if (lastErr) {
+                let errText = lastErr.message || String(lastErr);
+                if (lastErr.stack) errText += `\n${lastErr.stack}`;
+                respDiv.textContent = `Chat failed: ${errText}`;
+                // request diagnostics from background
+                try {
+                  $host.runtime.sendMessage({ operation: 'mqtt_status' }, (diagResp) => {
+                    if (!diagResp) return;
+                    if (diagResp.error) {
+                      respDiv.textContent += `\nDiagnostics error: ${diagResp.error}`;
+                      return;
+                    }
+                    const d = diagResp.diagnostics || {};
+                    const lines = [];
+                    lines.push(`mqtt_enabled=${d.mqtt_enabled}`);
+                    lines.push(`brokerUrl=${(d.mqtt_broker && d.mqtt_broker.brokerUrl) || 'none'}`);
+                    lines.push(`bridgePresent=${d.bridgePresent}`);
+                    lines.push(`clientPresent=${d.clientPresent}`);
+                    lines.push(`clientConnected=${d.clientConnected}`);
+                    lines.push(`mqttPrefix=${d.mqttPrefix || 'none'}`);
+                    respDiv.textContent += `\nDiagnostics:\n${lines.join('\n')}`;
+                  });
+                } catch (e) {
+                  respDiv.textContent += `\nDiagnostics request failed: ${e && e.message ? e.message : e}`;
+                }
+                return;
+              }
+              if (!reply) {
+                respDiv.textContent = 'No reply received';
+                return;
+              }
+              // reply expected to be { requestId, origin, payload }
+              try {
+                const rawEl = document.getElementById('chat-raw');
+                if (rawEl) {
+                  try { rawEl.textContent = JSON.stringify(reply, null, 2); /* keep hidden by default */ } catch (e) { rawEl.textContent = String(reply); }
+                }
+
+                // Try to extract a friendly text from the canonical QMS shape: payload.data.reply.text
+                let friendly = null;
+                if (reply && reply.payload && typeof reply.payload === 'object') {
+                  const p = reply.payload;
+                  // If backend returned a tokenId to maintain chat context, persist it
+                  try {
+                    if (p.data && p.data.tokenId) {
+                      storage.set({ chat_context: { tokenId: p.data.tokenId, uuid: (reply.uuid || (reply.callback && reply.callback.uuid) || null) } });
+                    }
+                  } catch (e) {}
+
+                  // Primary: QMS canonical shape
+                  if (p.data && p.data.reply && typeof p.data.reply.text === 'string') {
+                    friendly = p.data.reply.text;
+                  // fallbacks for older/alternate shapes
+                  } else if (p.response && typeof p.response === 'string') friendly = p.response;
+                  else if (p.reply && typeof p.reply === 'object' && (p.reply.text || p.reply.response)) friendly = p.reply.text || p.reply.response;
+                  else if (p.reply && typeof p.reply === 'string') friendly = p.reply;
+                  else if (p.responseText && typeof p.responseText === 'string') friendly = p.responseText;
+                  else if (p.choices && Array.isArray(p.choices) && p.choices[0] && (p.choices[0].text || p.choices[0].message)) friendly = p.choices[0].text || p.choices[0].message;
+                  else if (p.raw && p.raw.text) friendly = p.raw.text;
+                }
+                if (!friendly && reply && reply.payload && typeof reply.payload === 'string') friendly = reply.payload;
+                if (!friendly && reply && reply.response) friendly = reply.response;
+                if (!friendly) friendly = '[Received non-text reply — open devtools or enable raw view for details]';
+
+                // render assistant bubble and friendly text
+                renderChatMessage('assistant', friendly);
+                respDiv.textContent = friendly;
+              } catch (e) { respDiv.textContent = String(reply); }
+            });
+            });
+          } catch (e) { respDiv.textContent = `Chat send error: ${e && e.message ? e.message : e}`; }
+        });
+      }
 
     $('#sortable').sortable({ update: settings });
     $('#sortable').disableSelection();

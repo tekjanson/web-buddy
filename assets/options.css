@@ -1,31 +1,48 @@
 
 .panel-options {
-  padding: 0.5rem;
-  width: 350px;
-  height: 20px;
+  /* responsive container for each options panel */
   padding: 10px;
+  width: 100%;
+  max-width: 900px;
+  box-sizing: border-box;
+  margin-bottom: 1.25rem;
 }
 
 .grid-container {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  grid-auto-rows: repeat(3, 1fr);
-  grid-row-gap: 2rem;
+  /* two columns by default, let rows size to content */
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: auto;
+  grid-gap: 0.75rem 1rem;
+  align-items: start;
 }
 
 .heading {
-  grid-column: 1 / 4;
-  grid-row: 1;
-  /*h1 {
-    font-size: 1.2rem;
-  } */
+  grid-column: 1 / -1;
+  margin-bottom: 0.25rem;
+}
+
+.heading h1 {
+  font-size: 1.1rem;
+  margin: 0 0 0.25rem 0;
+}
+
+#hint, #hint-policy, #hint-broker {
+  color: #4a4a4a;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+#broker-status {
+  min-width: 160px;
 }
 
 input#custom-locators {
-  grid-column: 1 / 4;
-  grid-row: 2;
-  font-size: 0.9rem;
+  grid-column: 1 / -1;
+  font-size: 0.95rem;
   padding: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 input#custom-locators:focus {
@@ -33,17 +50,27 @@ input#custom-locators:focus {
   margin: none;
 }
 
+/* make form controls and labels stack nicely */
+label {
+  display: block;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+input[type="text"], input[type="password"], select {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  box-sizing: border-box;
+}
+
 button#reset, button#update {
-  min-width: 100%;
   margin: 0;
 }
 
-button#reset {
-  grid-column: 1;
-  grid-row: 3;
-}
+button#reset { grid-column: 1 / 2; }
+button#update { grid-column: 2 / 3; }
 
-button#update {
-  grid-column: 3;
-  grid-row: 3;
+@media (max-width: 640px) {
+  .grid-container { grid-template-columns: 1fr; }
+  button#reset, button#update { grid-column: 1 / -1; }
 }

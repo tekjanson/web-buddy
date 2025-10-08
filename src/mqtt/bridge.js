@@ -11,15 +11,22 @@
   function createClient(brokerUrl, opts) {
     // Browser: `mqtt` may be provided as a bundled UMD (exposed as `mqtt` global)
     if (typeof mqtt !== 'undefined') {
-      return mqtt.connect(brokerUrl, opts);
+      try {
+        console.debug('[MqttBridge] using bundled mqtt global, connecting to', brokerUrl);
+        return mqtt.connect(brokerUrl, opts);
+      } catch (e) {
+        console.warn('[MqttBridge] mqtt.connect threw', e);
+        return null;
+      }
     }
     // Node / tests
     try {
       // eslint-disable-next-line global-require
       const nodeMqtt = require('mqtt');
+      console.debug('[MqttBridge] using node mqtt client');
       return nodeMqtt.connect(brokerUrl, opts);
     } catch (e) {
-      console.warn('mqtt library not available; MQTT bridge disabled');
+      console.warn('[MqttBridge] mqtt library not available; MQTT bridge disabled', e);
       return null;
     }
   }
@@ -41,7 +48,12 @@
       if (cfg.password) opts.password = cfg.password;
 
       this.client = createClient(broker, opts);
-      if (!this.client) return;
+      if (!this.client) {
+        console.warn('[MqttBridge] createClient returned null for broker', broker);
+        return;
+      }
+
+      console.debug('[MqttBridge] client object created', !!this.client);
 
       this.client.on('connect', () => {
         this.connected = true;
@@ -52,6 +64,7 @@
         this.client.subscribe(controlTopic, { qos: 0 }, () => {});
         this.client.subscribe(suggestionsTopic, { qos: 0 }, () => {});
         this.onConnect();
+        console.debug('[MqttBridge] client connected, subscribed control & suggestion topics');
       });
 
       this.client.on('message', (topic, message) => {
@@ -66,6 +79,7 @@
 
       this.client.on('error', (err) => {
         this.onError(err);
+        console.warn('[MqttBridge] client error', err);
       });
     },
 
@@ -85,6 +99,14 @@
       this.connected = false;
     }
   };
+
+  // Export to common globals so the bridge is visible in different runtimes
+  try {
+    if (typeof globalThis !== 'undefined') {
+      globalThis.MqttBridge = MqttBridge;
+      console.debug('[MqttBridge] exported to globalThis');
+    }
+  } catch (e) {}
 
   if (typeof window !== 'undefined') window.MqttBridge = MqttBridge;
   if (typeof exports !== 'undefined') exports.MqttBridge = MqttBridge;
