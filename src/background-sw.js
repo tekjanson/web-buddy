@@ -13,7 +13,7 @@ try {
   // Load a browser mqtt bundle first so mqtt global exists for mqtt/bridge.js
   importScripts('../vendors/mqtt.min.js');
   importScripts('./mqtt/bridge.js');
-  importScripts('./background.js');
+  importScripts('./background-core.js');
 } catch (e) {
   console.error('Failed to import legacy background scripts in service worker:', e);
 }

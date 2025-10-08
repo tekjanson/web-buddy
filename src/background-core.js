@@ -1,15 +1,16 @@
 /*
- * background.js
- * NOTE: This file contains legacy background logic originally written for
- * Manifest V2. The active MV3 service worker is `src/background-sw.js`.
- * We keep this file for compatibility and as a reference for larger refactors.
+ * background-core.js
+ * Central background controller used by the MV3 service worker bootstrap.
+ * This file contains the background orchestration logic (message handling,
+ * MQTT bridge initialization, recording/scan state, translators) and is
+ * intentionally kept as an importable plain script so the service worker can
+ * import it using importScripts().
  */
 
 /* global chrome URL Blob */
 
 // Provide a safe host shim so the file can be used in environments where
-// `chrome`/`browser` may not be present (tests, bundlers). In MV3 the
-// service worker in `background-sw.js` should be used instead.
+// `chrome`/`browser` may not be present (tests, bundlers).
 const host = (typeof chrome !== 'undefined') ? chrome : (typeof browser !== 'undefined' ? browser : {
   storage: { local: { get: () => {}, set: () => {}, onChanged: { addListener: () => {} } } },
   tabs: { query: () => {}, sendMessage: () => {}, executeScript: () => {} },
@@ -643,3 +644,5 @@ try {
     });
   }
 } catch (e) {}
+
+// Export nothing - this file is imported for its side effects when run via importScripts

@@ -23,7 +23,7 @@ This enables a tightly-coupled human+AI workflow where the AI can inspect live p
 ## Where to start (key files)
 
 - `manifest.json` — extension registration, lists background scripts and content scripts injected into pages.
-- `src/background.js` — central controller. Handles UI commands (from popup/options), manages state in `chrome.storage.local`, coordinates content script messages, and calls translators to generate script output.
+- `src/background-core.js` — central controller. Handles UI commands (from popup/options), manages state in `chrome.storage.local`, coordinates content script messages, and calls translators to generate script output.
 - `src/content.js` — content script glue. Adds DOM listeners (click/change/keydown) and sends parsed events to the background script. Also handles the "scan" path by invoking the scanner to walk the DOM.
 - `src/constants.js` — UI/constants used across the extension (icons, filenames, status messages, default locators, etc.).
 - `src/locator/` — locator pipeline used by the scanner and on-the-fly parsing:
@@ -58,11 +58,11 @@ Translators expect a list of these event objects and will produce framework-spec
 ## Typical runtime flows
 
 1. User presses "Record" in the popup. Popup sends `{operation: 'record', locators: [...]}` to background.
-2. `background.js` sets icon, initializes `list` with a `url` event and sends a message to the active tab's content script.
+2. `background-core.js` sets icon, initializes `list` with a `url` event and sends a message to the active tab's content script.
 3. `content.js` receives `{operation: 'record'}` and attaches `click`, `change`, and `keydown` listeners. When an event occurs it calls `scanner.parseNode(...)`.
 4. The parsed node object is sent back to the background via `runtime.sendMessage` with `operation: 'action'` and either `script` (single) or `scripts` (array from scan).
-5. `background.js` accumulates events in `list`. When the user clicks Stop, it calls `translator.generateOutput(list, maxLength, demo, verify)`.
-6. Generated script is saved to `storage` and can be downloaded via `background.js` using the `downloads` API.
+5. `background-core.js` accumulates events in `list`. When the user clicks Stop, it calls `translator.generateOutput(list, maxLength, demo, verify)`.
+6. Generated script is saved to `storage` and can be downloaded via `background-core.js` using the `downloads` API.
 
 Scan flow is similar but uses `scanner.parseNodes` to walk the DOM and returns many candidate locator objects.
 
@@ -351,7 +351,7 @@ This lets the same recorded events be serialized into different frameworks, or b
 ## Quick reference: file responsibilities
 
 - `manifest.json` — extension configuration
-- `src/background.js` — orchestration and translation
+- `src/background-core.js` — orchestration and translation
 - `src/content.js` — DOM events wiring
 - `src/constants.js` — strings, messages, defaults
 - `src/locator/*` — builder, classifier, locator, xpath logic
@@ -361,7 +361,7 @@ This lets the same recorded events be serialized into different frameworks, or b
 
 MQTT-related places to extend:
 
-- `src/background.js` — natural place to add an MQTT client (or to call an MQTT bridge). Background script can publish recorded events, subscribe to control topics and route incoming commands to the active tab via `chrome.tabs.sendMessage`.
+- `src/background-core.js` — natural place to add an MQTT client (or to call an MQTT bridge). Background script can publish recorded events, subscribe to control topics and route incoming commands to the active tab via `chrome.tabs.sendMessage`.
 - `src/content.js` — execute runtime actions received from the background (click, input, navigate). Keep execution gated behind explicit permissions and user settings.
 - `src/translator/*` — add an `mqtt-translator.js` or a method that converts events into a framework-agnostic action array which can be sent over MQTT.
 
