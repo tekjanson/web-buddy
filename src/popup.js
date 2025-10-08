@@ -428,6 +428,31 @@ document.addEventListener(
       }
     );
 
+    // Run recorded steps in active tab
+    const runBtn = document.getElementById('run');
+    if (runBtn) {
+      runBtn.addEventListener('click', () => {
+        try {
+          storage.get({ last_actions: [] }, (s) => {
+            const list = s && Array.isArray(s.last_actions) ? s.last_actions : [];
+            if (!list || list.length === 0) {
+              alert('No recorded actions to run');
+              return;
+            }
+            // send run_translated to background with the recorded list
+            try {
+              $host.runtime.sendMessage({ operation: 'run_translated', list }, (resp) => {
+                const lastErr = $host.runtime && $host.runtime.lastError;
+                if (lastErr) {
+                  if (typeof rcLog !== 'undefined') rcLog('debug', 'run sendMessage lastError', lastErr.message);
+                }
+              });
+            } catch (e) { if (typeof rcLog !== 'undefined') rcLog('error', 'run sendMessage failed', e && e.message ? e.message : e); }
+          });
+        } catch (e) { alert('Failed to read recorded actions'); }
+      });
+    }
+
     ['demo', 'verify'].forEach((id) => {
       document.getElementById(id).addEventListener('change', settings);
     });

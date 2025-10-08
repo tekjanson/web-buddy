@@ -3,10 +3,32 @@
    Implements the same minimal translator contract used elsewhere in the project.
 */
 
-if (typeof translator === 'undefined') {
-  var translator = {
+/*
+  mqtt-translator.js
+  Lightweight UMD-style wrapper so the translator registers safely without
+  leaking globals. Exposes the translator as:
+    - CommonJS: module.exports.translator
+    - Browser global: window.translators.mqtt
+  Backwards compatibility: other code that expects a `translators` global will
+  continue working.
+*/
+
+(function rootFactory(root, factory) {
+  // CommonJS / Node
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports.translator = factory();
+    return;
+  }
+
+  // Browser/global
+  if (typeof root.translators === 'undefined') root.translators = {};
+  root.translators.mqtt = factory();
+}(typeof globalThis !== 'undefined' ? globalThis : this, function createTranslator() {
+  'use strict';
+
+  const translator = {
     generateOutput(list, maxLength, demo, verify) {
-    // Convert recorded events into neutral action objects
+      // Convert recorded events into neutral action objects
       const actions = (list || [])
         .filter(e => e && e.type !== 'url')
         .map(e => ({
@@ -30,7 +52,7 @@ if (typeof translator === 'undefined') {
     },
 
     generateFile(list, maxLength, demo, verify, libSource) {
-    // Return the same JSON as a file body
+      // Return the same JSON as a file body
       return this.generateOutput(list, maxLength, demo, verify);
     },
 
@@ -46,6 +68,6 @@ if (typeof translator === 'undefined') {
         }));
     }
   };
-}
 
-if (typeof exports !== 'undefined') exports.translator = translator;
+  return translator;
+}));

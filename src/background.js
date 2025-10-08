@@ -30,6 +30,8 @@ const maxLength = 5000;
 let recordTab = 0;
 let demo = false;
 let verify = false;
+// currently-selected output translator name (default 'cypress')
+let selectedTranslator = 'cypress';
 // MQTT bridge instance state
 let mqttActive = false;
 let mqttPrefix = null;
@@ -187,9 +189,28 @@ function sendMessageWithHandshake(tabObj, message, timeout = 300) {
 }
 
 function getTranslator() {
-  try { if (typeof translators !== 'undefined' && translators.robot) return translators.robot; } catch (e) {}
+  try {
+    bgDebug('getTranslator: selectedTranslator=', selectedTranslator, 'available translators=', (typeof translators !== 'undefined') ? Object.keys(translators) : null);
+    if (typeof translators !== 'undefined') {
+      if (translators[selectedTranslator]) return translators[selectedTranslator];
+      const keys = Object.keys(translators || {});
+      if (keys && keys.length) {
+        bgDebug('getTranslator: selectedTranslator not available, falling back to', keys[0]);
+        return translators[keys[0]];
+      }
+    }
+  } catch (e) {}
   try { if (typeof translator !== 'undefined') return translator; } catch (e) {}
-  try { const tindex = require('./translator/index.js'); if (tindex && tindex.robot) return tindex.robot; } catch (e) {}
+  try {
+    const tindex = require('./translator/index.js');
+    const tkeys = tindex && Object.keys(tindex);
+    bgDebug('getTranslator: tindex keys=', tkeys);
+    if (tindex && tindex[selectedTranslator]) return tindex[selectedTranslator];
+    if (tindex && tkeys && tkeys.length) {
+      bgDebug('getTranslator: selectedTranslator not found in tindex, falling back to', tkeys[0]);
+      return tindex[tkeys[0]];
+    }
+  } catch (e) {}
   return { generateOutput() { return ''; }, generateFile() { return ''; } };
 }
 
@@ -256,6 +277,20 @@ function initMqttIfEnabled() {
 }
 
 try { storage.onChanged.addListener((changes) => { if (changes.mqtt_broker || changes.mqtt_enabled) { bgDebug('mqtt storage changed, re-init'); initMqttIfEnabled(); } }); } catch (e) {}
+
+// initialize selected translator from storage and watch for changes
+try {
+  storage.get({ output_translator: 'cypress' }, (s) => {
+    selectedTranslator = (s && s.output_translator) ? s.output_translator : 'cypress';
+    bgDebug('selectedTranslator initialized', selectedTranslator);
+  });
+  storage.onChanged.addListener((changes) => {
+    if (changes.output_translator) {
+      selectedTranslator = changes.output_translator.newValue || 'robot';
+      bgDebug('selectedTranslator changed', selectedTranslator);
+    }
+  });
+} catch (e) { bgDebug('selectedTranslator storage init failed', e); }
 
 try {
   storage.set({ locators: ['for', 'name', 'id', 'title', 'href', 'class'], operation: 'stop', message: (typeof instruction !== 'undefined' ? instruction : 'Record or Scan'), demo: false, verify: false, canSave: false, isBusy: false });
@@ -384,10 +419,20 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
     });
     storage.set({ message: statusMessage[operation], operation: 'scan', canSave: true, isBusy: true });
   } else if (operation === 'stop') {
-    recordTab = 0; icon.setIcon({ path: logo[operation] }); script = getTranslator().generateOutput(list, maxLength, demo, verify); getActiveTab((tabObj) => { const t = tabObj || back_tabs; if (t) sendMessageWithHandshake(t, { operation: 'stop' }); }); storage.set({ message: script, operation, canSave: true });
+    recordTab = 0; icon.setIcon({ path: logo[operation] });
+    bgDebug('stop: invoking translator.generateOutput with selectedTranslator=', selectedTranslator);
+    const genStop = getTranslator();
+    try {
+      script = genStop.generateOutput(list, maxLength, demo, verify);
+      bgDebug('stop: generated script length=', script && script.length);
+    } catch (e) { bgDebug('stop: translator.generateOutput threw', e); script = ''; }
+    getActiveTab((tabObj) => { const t = tabObj || back_tabs; if (t) sendMessageWithHandshake(t, { operation: 'stop' }); }); storage.set({ message: script, operation, canSave: true });
     try { storage.set({ last_actions: list }); } catch (e) { bgDebug('failed to persist last_actions', e); }
   } else if (operation === 'save') {
-    const file = getTranslator().generateFile(list, maxLength, demo, verify, libSource);
+    bgDebug('save: invoking translator.generateFile with selectedTranslator=', selectedTranslator);
+    const genSave = getTranslator();
+    let file;
+    try { file = genSave.generateFile(list, maxLength, demo, verify, libSource); bgDebug('save: generated file length=', file && file.length); } catch (e) { bgDebug('save: translator.generateFile threw', e); file = ''; }
     const blob = new Blob([file], { type: 'text/plain;charset=utf-8' });
     try { if (typeof URL !== 'undefined' && host.downloads && host.downloads.download) { host.downloads.download({ url: URL.createObjectURL(blob, { oneTimeOnly: true }), filename }); } else throw new Error('downloads API or URL unavailable'); } catch (e) { const fileText = file; storage.set({ last_file: { filename, body: fileText, time: Date.now() } }); }
   } else if (operation == 'pom') {

@@ -1,99 +1,111 @@
-const map = {
-  url: { keyword: "cy.visit('", keyword2: "')" },
-  text: { keyword: "cy.xpath('", value: 'y', keyword2: "')" },
-  file: { keyword: "cy.xpath('", value: 'y', keyword2: "')" },
-  hover: { keyword: "cy.xpath('", keyword2: "').trigger('mouseover')" },
-  button: { keyword: "cy.xpath('", keyword2: "').click()" },
-  a: { keyword: "cy.xpath('", keyword2: "').click()" },
-  select: { keyword: "cy.xpath('", select: 'y', keyword2: "')" },
-  // radio:  { keyword: 'Select Radio Button', value: 'y' },
-  demo: { keyword: 'cy.wait(', keyword2: "')" },
-  // verify: { keyword: 'Wait Until Page Contains Element',keyword2: "')" },
-  default: { keyword: "cy.xpath('", keyword2: "').click()" }
-};
+/*
+  Cypress translator
+  Produces Cypress test commands (assuming cypress-xpath plugin is available).
+  Improved: safer escaping, verify/demo options, better formatting, UMD-style export.
+*/
 
-if (typeof translator === 'undefined') {
-  var translator = {
-    generateOutput(list, length, demo, verify) {
-      const events = this._generateEvents(list, length, demo, verify);
+(function rootFactory(root, factory) {
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports.translator = factory();
+    return;
+  }
+  if (typeof root.translators === 'undefined') root.translators = {};
+  root.translators.cypress = factory();
+}(typeof globalThis !== 'undefined' ? globalThis : this, function createTranslator() {
+  'use strict';
 
-      return events.join('\n');
-    },
+  const DEFAULT_WAIT_MS = 300;
 
-    generateFile(list, length, demo, verify, source) {
-      let events = this._generateEvents(list, length, demo, verify);
-      let libs = '';
-      for (let i = 0; i < source.length; i++) {
-        libs += `\nLibrary           ${source[i]}`;
-      // Do something
-      }
+  function escapeForSingleQuoteJs(s) {
+    if (typeof s !== 'string') return s;
+    return s.replace(/\\/g, '\\').replace(/'/g, "\\'");
+  }
 
-      events = events.reduce((a, b) => `${a}    ${b}\n`, '');
-      return `
-    ${libs}
-    describe('${list[0].title}', () => {
-      it('${list[0].title} test', () => {
-        ${events}
-      })
-    })
-    `;
-    // return '*** Settings ***'
-    //   + `\nDocumentation     A test suite with a single test for ${list[0].title}`
-    //   + "\n...               Created by hats' Robotcorderv2"
-    //   + '\nLibrary           Selenium2Library    timeout=10'
-    //   + `\n${libs}`
-    //   + '\n\n*** Variables ***'
-    //   + '\n${BROWSER}    chrome'
-    //   + '\n${SLEEP}    3'
-    //   + '\n\n*** Test Cases ***'
-    //   + `\n${list[0].title} test`
-    //   + `\n${events}`
-    //   + '\n    Close Browser';
-    },
+  function normalizeXPath(path) {
+    if (!path) return '';
+    // Remove leading 'xpath=' if present
+    if (path.indexOf('xpath=') === 0) return path.slice(6);
+    return path;
+  }
 
-    _generatePath(attr) {
-      let path = '';
-      if (attr.type === 'pomer') {
-        path = attr.trigger;
-        for (let i = 0; i < attr.arguments.length; i++) {
-          path += `    ${attr.arguments[i]} `;
+  function buildElementChain(path) {
+    // Use cy.xpath(...) as the entry point (requires cypress-xpath plugin in user's test)
+    return `cy.xpath('${escapeForSingleQuoteJs(path)}')`;
+  }
+
+  function buildActionForAttr(attr) {
+    if (!attr) return '';
+    if (attr.type === 'pomer') {
+      // represent pomer as a comment block with arguments
+      let out = `// POMER: ${attr.trigger}`;
+      for (let i = 0; i < (attr.arguments || []).length; i++) out += ` ${String(attr.arguments[i])}`;
+      return out;
+    }
+
+    if (attr.type === 'url') return `cy.visit('${escapeForSingleQuoteJs(attr.path)}');`;
+
+    const rawPath = normalizeXPath(attr.path || '');
+    const base = buildElementChain(rawPath);
+    switch ((attr.type || '').toLowerCase()) {
+      case 'hover':
+        return `${base}.trigger('mouseover');`;
+      case 'select':
+        return `${base}.select('${escapeForSingleQuoteJs(attr.value || '')}');`;
+      case 'text':
+      case 'file':
+        // .clear().type(...) to be explicit
+        return `${base}.clear().type('${escapeForSingleQuoteJs(attr.value || '')}');`;
+      case 'a':
+      case 'button':
+      default:
+        return `${base}.click();`;
+    }
+  }
+
+  function generateVerifyCommand(attr) {
+    if (!attr || !attr.path) return null;
+    const path = normalizeXPath(attr.path);
+    return `cy.xpath('${escapeForSingleQuoteJs(path)}').should('exist');`;
+  }
+
+  const translator = {
+    generateOutput(list, length = 1000, demo = false, verify = false) {
+      const lines = [];
+      for (let i = 0; i < (list || []).length && i < length; i++) {
+        const item = list[i];
+        if (verify && item.path) {
+          lines.push(generateVerifyCommand(item));
         }
-      } else {
-        const type = map[attr.type] || map.default;
-        path = type.keyword;
-
-        path += attr.type === 'url' ? `${attr.path}` : `${attr.path.replace("'", "\\'")}`;
-        path += attr.value && type.value ? `').type('${attr.value}` : '';
-        path += attr.select && type.value ? `').select('${attr.value}` : '';
-        path += type.keyword2;
+        const cmd = buildActionForAttr(item);
+        if (cmd) lines.push(cmd);
+        if (demo) lines.push(`cy.wait(${DEFAULT_WAIT_MS});`);
       }
-      return path;
+      return lines.join('\n');
     },
 
-    _generateDemo(demo) {
-      return demo ? map.demo.keyword : '';
+    generateFile(list, length = 1000, demo = false, verify = false, /* source */) {
+      const title = (list && list[0] && list[0].title) ? escapeForSingleQuoteJs(list[0].title) : 'Robotcorder Test';
+      const body = this.generateOutput(list, length, demo, verify)
+        .split('\n')
+        .map(l => (l ? `    ${l}` : l))
+        .join('\n');
+
+      // Minimal Cypress test file. Note: user may need to install cypress-xpath plugin.
+      return `// Generated by Robotcorder - Cypress test\n// Requires cypress-xpath plugin if using xpath selectors\n\ndescribe('${title}', () => {\n  it('${title} test', () => {\n${body}\n  });\n});\n`;
     },
 
-    _generateVerify(attr, verify) {
-      return attr.path && verify ? `${map.verify.keyword}    ${attr.path}` : '';
-    },
-
-    _generateEvents(list, length, demo, verify) {
-      let event = null;
-      const events = [];
-      for (let i = 0; i < list.length && i < length; i++) {
-        if (i > 0) {
-          event = this._generateVerify(list[i], verify);
-          event && events.push(event);
-        }
-        event = this._generatePath(list[i]);
-        event && events.push(event);
-        event = this._generateDemo(demo);
-        event && events.push(event);
-      }
-      return events;
+    // Helper to create a programmatic action array (lightweight)
+    generateActions(list, options) {
+      return (list || [])
+        .filter(e => e && e.type !== 'url')
+        .map(e => ({
+          action: (e.trigger || e.action || 'unknown'),
+          path: e.path || e.xpath || null,
+          value: e.value || e.text || null,
+          time: e.time || Date.now()
+        }));
     }
   };
-}
 
-if (typeof exports !== 'undefined') exports.translator = translator;
+  return translator;
+}));
