@@ -68,6 +68,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el) el.checked = enabled;
   });
 
+  // load share UI steps flag
+  storage.get({ share_ui_steps: false }, (state) => {
+    const shared = state.share_ui_steps || false;
+    const el = document.getElementById('share-ui-steps');
+    if (el) el.checked = shared;
+  });
+
   document.getElementById('save-broker').addEventListener('click', () => {
     const brokerUrl = document.getElementById('broker-url').value;
     const clientId = document.getElementById('client-id').value;
@@ -129,6 +136,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (mqttToggle) {
     mqttToggle.addEventListener('change', () => {
       storage.set({ mqtt_enabled: !!mqttToggle.checked });
+    });
+  }
+
+  // toggle share UI steps explicitly
+  const shareToggle = document.getElementById('share-ui-steps');
+  if (shareToggle) {
+    shareToggle.addEventListener('change', () => {
+      storage.set({ share_ui_steps: !!shareToggle.checked });
     });
   }
 

@@ -484,6 +484,14 @@ document.addEventListener(
       });
     } catch (e) { if (typeof rcLog !== 'undefined') rcLog('error', 'failed to read mqtt status', e && e.message ? e.message : e); }
 
+    // Load share UI steps flag for popup checkbox
+    try {
+      storage.get({ share_ui_steps: false }, (s) => {
+        const el = document.getElementById('share-ui-steps');
+        if (el) el.checked = !!(s && s.share_ui_steps);
+      });
+    } catch (e) { /* ignore */ }
+
     ['record', 'resume', 'stop', 'pause', 'save', 'scan', 'pom'].forEach(
       (id) => {
         // add pom??
@@ -494,6 +502,14 @@ document.addEventListener(
     ['demo', 'verify'].forEach((id) => {
       document.getElementById(id).addEventListener('change', settings);
     });
+
+    // persist share-ui-steps changes when user toggles in popup settings
+    const popupShareEl = document.getElementById('share-ui-steps');
+    if (popupShareEl) {
+      popupShareEl.addEventListener('change', () => {
+        try { storage.set({ share_ui_steps: !!popupShareEl.checked }); } catch (e) {}
+      });
+    }
 
     document.getElementById('like').addEventListener('click', like);
     document.getElementById('info').addEventListener('click', info);
@@ -517,9 +533,12 @@ document.addEventListener(
               // send chat request to background and await reply
               try {
                 // read last context tokenId from storage and include it
-                storage.get({ chat_context: null }, (s) => {
-                  const ctx = s && s.chat_context ? s.chat_context : null;
-                  const outgoing = { operation: 'chat', input: text, context: ctx };
+                  storage.get({ chat_context: null, share_ui_steps: false }, (s) => {
+                    const ctx = s && s.chat_context ? s.chat_context : null;
+                    const includeSteps = s && s.share_ui_steps;
+                    // when enabled, include the current UI steps as additional context
+                    const uiSteps = includeSteps ? (document.getElementById('textarea-script').value || '') : null;
+                    const outgoing = { operation: 'chat', input: text, context: ctx, ui_steps: uiSteps };
                   // render user bubble immediately
                   renderChatMessage('user', text);
 

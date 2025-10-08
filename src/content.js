@@ -38,9 +38,10 @@ function sendAction(scriptOrScripts) {
 
 function recordChange(e) {
   try {
-    const attr = scanner.parseNode(now(), e.target, locatorStrategies);
+    const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'text', value: e.target.value || null };
     debugLog('recordChange parsed attr', attr);
-    if (isChangeType(attr.type)) {
+    // For change events, consider text/select/file types; fallback to 'text' when unsure
+    if (isChangeType(attr.type) || !attr.type) {
       Object.assign(attr, { trigger: 'change' });
       sendAction(attr);
     }
@@ -67,8 +68,9 @@ function recordKeydown(e) {
 
 function recordClick(e) {
   try {
-    const attr = scanner.parseNode(now(), e.target, locatorStrategies);
+    const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'click', value: null };
     debugLog('recordClick parsed attr', { tag: e.target.tagName, id: e.target.id, classes: e.target.className, attr });
+    // Record clicks for all elements unless classifier says it's a change-only control
     if (!isChangeType(attr.type)) {
       Object.assign(attr, { trigger: 'click' });
       sendAction(attr);
@@ -81,10 +83,12 @@ function recordClick(e) {
 // capture typing as input events so we record text changes live
 function recordInput(e) {
   try {
-    const attr = scanner.parseNode(now(), e.target, locatorStrategies);
+    const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'text', value: e.target.value || null };
     debugLog('recordInput parsed attr', { tag: e.target.tagName, id: e.target.id, classes: e.target.className, attr });
-    if (isChangeType(attr.type)) {
+    if (isChangeType(attr.type) || e.inputType) {
       Object.assign(attr, { trigger: 'input' });
+      // include the current value if available
+      if (typeof e.target.value !== 'undefined') attr.value = e.target.value;
       sendAction(attr);
     }
   } catch (err) {

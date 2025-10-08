@@ -35,6 +35,21 @@ function getActiveTab(cb) {
   }
 }
 
+// Try to inject content script into a tab (MV3 scripting API) to ensure listeners exist
+function injectContentScript(tabId, cb) {
+  try {
+    if (!tabId) { if (typeof cb === 'function') cb(new Error('no-tab')); return; }
+    if (!host.scripting || !host.scripting.executeScript) {
+      // older MV2 fallback: try tabs.executeScript if available
+      try {
+        host.tabs.executeScript(tabId, { file: 'src/content.js' }, () => { if (typeof cb === 'function') cb(null); });
+        return;
+      } catch (e) { if (typeof cb === 'function') cb(e); return; }
+    }
+    host.scripting.executeScript({ target: { tabId }, files: ['src/content.js'] }).then(() => { if (typeof cb === 'function') cb(null); }).catch((err) => { if (typeof cb === 'function') cb(err); });
+  } catch (e) { if (typeof cb === 'function') cb(e); }
+}
+
 function sendMessageToTabObj(tabObj, message) {
   if (!tabObj || !tabObj.id) {
     console.warn('No tab available to send message', message);
@@ -354,6 +369,7 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
     storage.set({ message: statusMessage[operation], operation: 'scan', canSave: true, isBusy: true });
   } else if (operation === 'stop') {
     recordTab = 0; icon.setIcon({ path: logo[operation] }); script = getTranslator().generateOutput(list, maxLength, demo, verify); getActiveTab((tabObj) => { const t = tabObj || back_tabs; if (t) sendMessageWithHandshake(t, { operation: 'stop' }); }); storage.set({ message: script, operation, canSave: true });
+    try { storage.set({ last_actions: list }); } catch (e) { bgDebug('failed to persist last_actions', e); }
   } else if (operation === 'save') {
     const file = getTranslator().generateFile(list, maxLength, demo, verify, libSource);
     const blob = new Blob([file], { type: 'text/plain;charset=utf-8' });
@@ -393,6 +409,29 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
         envelope.payload.context = { tokenId: request.context.tokenId, uuid: request.context.uuid || (request.callback && request.callback.uuid) || null };
       }
     } catch (e) {}
+
+    // If caller included UI steps (popup), forward them to the AI payload and include
+    // them in the canonical `input` field so the model receives the UI context inline.
+    try {
+      if (request && request.ui_steps) {
+        const raw = String(request.ui_steps || '');
+        // keep a reasonable upper bound (20k chars) to avoid very large MQTT messages
+        const uiText = raw.length > 20000 ? raw.slice(0, 20000) : raw;
+        envelope.payload.ui_steps = uiText;
+
+        try {
+          const baseInput = String(envelope.payload.input || '');
+          // Merge UI steps into the input with a clear separator so the model can distinguish
+          // between the original user prompt and the recorded UI steps. If both exist, append
+          // the ui steps after the prompt; otherwise send only the ui steps.
+          let merged = baseInput && baseInput.length ? `${baseInput}\n\n[UI steps]\n${uiText}` : `[UI steps]\n${uiText}`;
+          // cap the merged input to the same upper bound to avoid oversized payloads
+          merged = merged.length > 20000 ? merged.slice(0, 20000) : merged;
+          envelope.payload.input = merged;
+          envelope.payload.text = merged; // keep text consistent with input
+        } catch (e) { bgDebug('failed to merge ui_steps into input', e); }
+      }
+    } catch (e) { bgDebug('failed to attach ui_steps to envelope', e); }
 
     // Helper that performs the subscribe/publish flow using a connected client
     const attemptChat = (client) => {
@@ -522,6 +561,7 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
     if (request.scripts) {
       bgDebug('received scripts array, count', request.scripts && request.scripts.length);
       icon.setIcon({ path: logo.stop }); list = list.concat(request.scripts || []); bgDebug('list length after concat', list.length); script = getTranslator().generateOutput(list, maxLength, demo, verify); storage.set({ message: script, operation: 'stop', isBusy: false });
+        try { storage.set({ last_actions: list }); } catch (e) { bgDebug('failed to persist last_actions', e); }
       try {
         if (mqttActive && typeof MqttBridge !== 'undefined') {
           const payload = (typeof translators !== 'undefined' && translators.mqtt) ? translators.mqtt.generateOutput(list) : (typeof translator !== 'undefined' && translator.generateOutput) ? translator.generateOutput(list) : null;

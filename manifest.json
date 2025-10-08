@@ -45,6 +45,6 @@
     "48": "assets/logo-48.png",
     "128": "assets/logo-128.png"
   },
-  "permissions": ["activeTab", "downloads", "storage"],
+  "permissions": ["activeTab", "downloads", "storage", "scripting"],
   "host_permissions": ["<all_urls>"]
 }
