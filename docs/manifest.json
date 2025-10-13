@@ -1,0 +1,15 @@
+{
+  "short_name": "WebBuddy",
+  "name": "Web Buddy Documentation",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#37474f",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}

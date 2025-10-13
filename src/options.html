@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <link rel="stylesheet" type="text/css" href="../assets/style.css">
+  <link rel="stylesheet" type="text/css" href="../assets/options.css">
+  <script defer src="../vendors/jquery-3.3.1.min.js"></script>
+  <script defer src="../vendors/jquery-ui.min.js"></script>
+</head>
+<body>
+<div class="panel-options">
+  <div class="grid-container">
+    <div class="heading">
+      <h1>Custom Locators</h1>
+      <div id="hint">Add your own flavoured locators! Separate with a commas.</div>
+    </div>
+    <input type="text" id="custom-locators"/>
+    <button class="btn btn-wide" id="reset">Reset</button>
+    <button class="btn btn-wide" id="update">Update</button>
+  </div>
+</div>
+<div class="panel-options">
+  <div class="grid-container">
+    <div class="heading">
+      <h1>MQTT / Execution Policy</h1>
+      <div id="hint-policy">Control how MQTT/LLM commands are handled by the extension.</div>
+    </div>
+    <label for="output-translator">Output Format (default: Cypress)</label>
+    <select id="output-translator">
+      <option value="robot">RobotFramework</option>
+      <option value="cypress">Cypress (default)</option>
+      <option value="playwright">Playwright</option>
+      <option value="selenium">Selenium (WebDriver)</option>
+    </select>
+    <label for="mode">Default Mode</label>
+    <select id="mode">
+      <option value="suggestion">Suggestion (default)</option>
+      <option value="automatic">Automatic</option>
+    </select>
+
+    <label for="allowed-actions">Allowed actions (comma-separated)</label>
+    <input type="text" id="allowed-actions" />
+
+    <label for="per-test-type">Per test type (json)</label>
+    <input type="text" id="per-test-type" />
+
+    <button class="btn btn-wide" id="save-policy">Save Policy</button>
+  </div>
+</div>
+<div class="panel-options">
+  <div class="grid-container">
+    <div class="heading">
+      <h1>AI Provider</h1>
+      <div id="hint-ai-provider">Configure and select your AI provider for suggestions and execution.</div>
+    </div>
+
+    <label for="ai-provider">Select Provider</label>
+    <select id="ai-provider">
+      <option value="mqtt">MQTT</option>
+      <option value="gemini">Gemini</option>
+    </select>
+
+    <div id="mqtt-settings">
+      <label for="broker-url">Broker URL (wss:// or ws://)</label>
+      <input type="text" id="broker-url" />
+
+      <label for="client-id">Client ID</label>
+      <input type="text" id="client-id" />
+
+      <label for="username">Username (optional)</label>
+      <input type="text" id="username" />
+
+      <label for="password">Password (optional)</label>
+      <input type="password" id="password" />
+
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-wide" id="save-broker">Save Broker</button>
+        <button class="btn btn-wide" id="test-broker">Test Connection</button>
+        <span id="broker-status" aria-live="polite" style="margin-left:8px;color:#333;font-size:0.95rem"></span>
+      </div>
+    </div>
+
+    <div id="gemini-settings" style="display: none;">
+      <label for="gemini-api-key">API Key</label>
+      <input type="password" id="gemini-api-key" />
+       <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-wide" id="save-gemini">Save Gemini</button>
+        <button class="btn btn-wide" id="test-gemini">Test Connection</button>
+      </div>
+    </div>
+
+    <label for="share-ui-steps">Share UI steps with AI</label>
+    <input type="checkbox" id="share-ui-steps" />
+  </div>
+</div>
+<div class="panel-options">
+  <div class="grid-container">
+    <div class="heading">
+      <h1>Remote Entry removed</h1>
+      <div id="hint-remote">Module Federation / remote mounting support has been removed from this build.</div>
+    </div>
+  </div>
+</div>
+  <script src="./logger.js"></script>
+  <script src="./options.js"></script>
+  <script src="./pom.js"></script>
+</body>
+
+</html>

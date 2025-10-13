@@ -1,0 +1,71 @@
+{
+  "manifest_version": 3,
+  "name": "Web Buddy",
+  "version": "0.4.0",
+  "homepage_url": "https://github.com/tekjanson/Web-Buddy",
+  "description": "A Robot that records user action and scans the page to generate RobotFramework test scripts (beta)",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "background": {
+    "service_worker": "src/background-sw.js"
+  },
+  "options_ui": {
+    "page": "src/options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [{
+    "matches": [
+      "<all_urls>"
+    ],
+    "js": [
+      "./src/logger.js",
+      "./src/locator/xpath-locator.js",
+      "./src/locator/tree-builder.js",
+      "./src/locator/classifier.js",
+      "./src/locator/scanner.js",
+      "./src/content.js"
+    ],
+    "run_at": "document_end",
+    "all_frames": true
+  }],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/pom.js",
+        "src/offscreen-worker.js",
+        "src/offscreen.html",
+        "src/constants.js",
+        "src/messages.js",
+        "src/translator/cypress-translator.js",
+        "src/translator/mqtt-translator.js",
+        "src/translator/playwright-translator.js",
+        "src/translator/selenium-translator.js",
+        "src/translator/index.js",
+        "src/executor.js",
+        "vendors/mqtt.min.js",
+        "src/mqtt/bridge.js",
+        "src/state.js",
+        "src/utils.js",
+        "src/messaging.js",
+        "src/offscreen.js",
+        "src/mqtt.js",
+        "src/handlers.js",
+        "src/background-core.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "action": {
+    "default_icon": "assets/icon-stop.png",
+    "default_popup": "src/popup.html"
+  },
+  "icons": {
+    "16": "assets/logo-16.png",
+    "32": "assets/logo-32.png",
+    "48": "assets/logo-48.png",
+    "128": "assets/logo-128.png"
+  },
+  "permissions": ["activeTab", "downloads", "storage", "scripting", "offscreen"],
+  "host_permissions": ["<all_urls>"]
+}
