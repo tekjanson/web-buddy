@@ -47,7 +47,10 @@ async function setupOffscreenDocument() {
             try { has = await has; } catch (e) { bgDebug('setupOffscreenDocument: hasDocument() promise rejected', e && e.message ? e.message : e); has = false; }
           }
           bgDebug('setupOffscreenDocument: hasDocument() =>', has);
-          if (has) return;
+          if (has) {
+            // If document exists, it might still be loading. Wait for it to be ready.
+            return waitForOffscreenReady();
+          }
         } catch (e) {
           bgDebug('setupOffscreenDocument: hasDocument() threw, will attempt createDocument', e && e.message ? e.message : e);
           // continue to attempt createDocument
@@ -83,13 +86,16 @@ async function setupOffscreenDocument() {
         // Re-throw so callers can handle the failure; we've logged the attempts.
         throw lastErr;
       }
+      // After successfully calling createDocument, wait for it to be ready.
+      return waitForOffscreenReady();
   } catch (e) {
     // If createDocument fails because the document already exists, it's fine.
     // Re-throw other errors so callers can respond with useful messages.
     try {
         if (typeof host.offscreen.hasDocument === 'function') {
-          const has = host.offscreen.hasDocument && host.offscreen.hasDocument();
-          if (has) return;
+          let has = host.offscreen.hasDocument && host.offscreen.hasDocument();
+          if (has && typeof has.then === 'function') has = await has;
+          if (has) return waitForOffscreenReady();
         }
     } catch (ee) {}
     throw e;
