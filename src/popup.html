@@ -114,6 +114,10 @@
         ></button>
         <button class="btn" id="open-options" tabindex="-1" title="open options"></button>
           <button class="btn" id="pin" tabindex="-1" title="pin window (keep open)"></button>
+        <!-- AI provider badge -->
+        <span id="ai-provider-badge" style="display:inline-block;margin-left:8px;padding:6px 8px;border-radius:10px;font-size:12px;color:#fff;background:#6b7280">AI: unknown</span>
+        <!-- Share UI steps badge -->
+        <span id="share-ui-steps-badge" style="display:inline-block;margin-left:4px;padding:6px 8px;border-radius:10px;font-size:12px;color:#fff;background:#6b7280">UI Steps: Off</span>
         <button
           class="btn"
           id="settings"
@@ -149,10 +153,6 @@
           <label for="verify"
             >Check page contains element before performing the action</label
           >
-        </div>
-        <div>
-          <input type="checkbox" id="share-ui-steps" />
-          <label for="share-ui-steps">Share UI steps with AI</label>
         </div>
       </div>
     </div>

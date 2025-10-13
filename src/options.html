@@ -50,31 +50,47 @@
 <div class="panel-options">
   <div class="grid-container">
     <div class="heading">
-      <h1>MQTT Broker</h1>
-      <div id="hint-broker">Configure MQTT broker (WebSocket) for local dev/testing.</div>
+      <h1>AI Provider</h1>
+      <div id="hint-ai-provider">Configure and select your AI provider for suggestions and execution.</div>
     </div>
-    <label for="broker-url">Broker URL (wss:// or ws://)</label>
-    <input type="text" id="broker-url" />
 
-  <label for="mqtt-enabled">Enable MQTT</label>
-  <input type="checkbox" id="mqtt-enabled" />
+    <label for="ai-provider">Select Provider</label>
+    <select id="ai-provider">
+      <option value="mqtt">MQTT</option>
+      <option value="gemini">Gemini</option>
+    </select>
 
-  <label for="share-ui-steps">Share UI steps with AI</label>
-  <input type="checkbox" id="share-ui-steps" />
+    <div id="mqtt-settings">
+      <label for="broker-url">Broker URL (wss:// or ws://)</label>
+      <input type="text" id="broker-url" />
 
-    <label for="client-id">Client ID</label>
-    <input type="text" id="client-id" />
+      <label for="client-id">Client ID</label>
+      <input type="text" id="client-id" />
 
-    <label for="username">Username (optional)</label>
-    <input type="text" id="username" />
+      <label for="username">Username (optional)</label>
+      <input type="text" id="username" />
 
-    <label for="password">Password (optional)</label>
-    <input type="password" id="password" />
-    <div style="display:flex; gap:8px; align-items:center;">
-      <button class="btn btn-wide" id="save-broker">Save Broker</button>
-      <button class="btn btn-wide" id="test-broker">Test Connection</button>
-      <span id="broker-status" aria-live="polite" style="margin-left:8px;color:#333;font-size:0.95rem"></span>
+      <label for="password">Password (optional)</label>
+      <input type="password" id="password" />
+
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-wide" id="save-broker">Save Broker</button>
+        <button class="btn btn-wide" id="test-broker">Test Connection</button>
+        <span id="broker-status" aria-live="polite" style="margin-left:8px;color:#333;font-size:0.95rem"></span>
+      </div>
     </div>
+
+    <div id="gemini-settings" style="display: none;">
+      <label for="gemini-api-key">API Key</label>
+      <input type="password" id="gemini-api-key" />
+       <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-wide" id="save-gemini">Save Gemini</button>
+        <button class="btn btn-wide" id="test-gemini">Test Connection</button>
+      </div>
+    </div>
+
+    <label for="share-ui-steps">Share UI steps with AI</label>
+    <input type="checkbox" id="share-ui-steps" />
   </div>
 </div>
 <div class="panel-options">

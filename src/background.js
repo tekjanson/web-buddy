@@ -16,7 +16,8 @@ const host = (typeof chrome !== 'undefined') ? chrome : (typeof browser !== 'und
   runtime: { lastError: null, sendMessage: () => {} },
   action: { setIcon: () => {} },
   downloads: { download: () => {} },
-  scripting: undefined
+  scripting: undefined,
+  offscreen: { createDocument: () => {} }
 });
 const once = { once: true };
 let elementState = { state: false };
