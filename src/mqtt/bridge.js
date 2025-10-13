@@ -58,7 +58,7 @@
       this.client.on('connect', () => {
         this.connected = true;
         // subscribe to control & suggestions topics
-        const prefix = cfg.topicPrefix || `robotcorder/${opts.clientId || 'client'}`;
+  const prefix = cfg.topicPrefix || `web-buddy/${opts.clientId || 'client'}`;
         const controlTopic = `${prefix}/control`;
         const suggestionsTopic = `${prefix}/suggestions`;
         this.client.subscribe(controlTopic, { qos: 0 }, () => {});
@@ -85,7 +85,7 @@
 
     publishActions(prefix, payload) {
       if (!this.client || !this.connected) return false;
-      const topic = `${prefix || this.cfg.topicPrefix || 'robotcorder/client'}/events`;
+  const topic = `${prefix || this.cfg.topicPrefix || 'web-buddy/client'}/events`;
       const msg = typeof payload === 'string' ? payload : JSON.stringify(payload);
       this.client.publish(topic, msg);
       return true;

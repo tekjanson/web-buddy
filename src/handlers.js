@@ -285,8 +285,8 @@ function handleMessage(request, sender, sendResponse) {
     // Send a chat request to qms-ai/chat/request using a per-request returnTopic
     const input = request.input || '';
     const requestId = request.requestId || `req-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-    const origin = `robotcorder/${host.runtime && host.runtime.id ? host.runtime.id : (mqttPrefix || 'robotcorder')}`;
-    const returnTopic = `${mqttPrefix || 'robotcorder'}/qms-ai/chat/reply/${requestId}`;
+  const origin = `web-buddy/${host.runtime && host.runtime.id ? host.runtime.id : (mqttPrefix || 'web-buddy')}`;
+  const returnTopic = `${mqttPrefix || 'web-buddy'}/qms-ai/chat/reply/${requestId}`;
 
     // Build payload in the QMS-friendly shape. Include text, input, clientId, persist, and instruction.
     const inferredClientId = (request && request.clientId) || ((mqttPrefix && mqttPrefix.split && mqttPrefix.split('/').pop()) || (host.runtime && host.runtime.id) || null);

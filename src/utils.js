@@ -18,7 +18,7 @@ function getActiveTab(cb) {
 
 function bgDebug(...args) {
   // Simple debug logger for the background script
-  console.debug('[Robotcorder BG]', ...args);
+  console.debug('[WebBuddy BG]', ...args);
 }
 
 function getTranslator(selectedTranslator) {

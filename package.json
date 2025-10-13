@@ -1,5 +1,5 @@
 {
-  "name": "robotcorder",
+  "name": "web-buddy",
   "version": "0.4.0",
   "description": "A Robot that records user action and scans the page to generate RobotFramework test scripts (beta)",
   "main": "src/background-core.js",
@@ -12,19 +12,19 @@
     "test-local": "mocha -r test/setup.js test/* --reporter spec",
     "test": "npm run lint && npm run test-local",
     "export": "./script/export.command",
-    "build": "mkdir -p dist && zip -r dist/robotcorder.zip . -x node_modules/** -x .git/** -x dist/** -x docs/**",
+  "build": "mkdir -p dist && zip -r dist/web-buddy.zip . -x node_modules/** -x .git/** -x dist/** -x docs/**",
     "clean": "rm -rf dist node_modules"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tekjanson/Robotcorder.git"
+  "url": "git+https://github.com/tekjanson/Web-Buddy.git"
   },
   "author": "jamie levine <jamie.levine.phone@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/tekjanson/Robotcorder/issues"
+  "url": "https://github.com/tekjanson/Web-Buddy/issues"
   },
-  "homepage": "https://github.com/tekjanson/Robotcorder#readme",
+  "homepage": "https://github.com/tekjanson/Web-Buddy#readme",
   "devDependencies": {
     "chai": "^4.1.2",
     "eslint": "^5.0.0",

@@ -1,1 +1,50 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta name="theme-color" content="#000000"><meta name="Description" content="Learn more about Robotcorder"><link async rel="manifest" href="./manifest.json"><link async rel="shortcut icon" href="./favicon.ico"><title>Robotcorder</title><link href="./static/css/main.449309a4.css" rel="stylesheet"></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div><script type="text/javascript" src="./static/js/main.cf654d39.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width,initial-scale=1" />
+		<meta name="theme-color" content="#37474f" />
+		<meta name="description" content="Web Buddy — browser helper for recording & replaying interactions" />
+		<link rel="manifest" href="./manifest.json" />
+		<link rel="icon" href="./favicon.ico" />
+		<title>Web Buddy</title>
+		<link rel="stylesheet" href="./style.css" />
+	</head>
+	<body>
+		<header class="hero">
+			<div class="container">
+				<h1>Web Buddy</h1>
+				<p class="tagline">A lightweight tool to help you capture and replay web interactions.</p>
+				<p class="cta">This documentation is a small, self-contained replacement site — replace with your full docs or rebuild from source when available.</p>
+			</div>
+		</header>
+
+		<main class="container">
+			<section>
+				<h2>Quick Start</h2>
+				<ol>
+					<li>Install the extension from your preferred store or load unpacked in developer mode.</li>
+					<li>Open the popup and click <strong>Record</strong> to begin capturing interactions.</li>
+					<li>Use the <strong>Play</strong> feature to replay recorded steps.</li>
+				</ol>
+			</section>
+
+			<section>
+				<h2>Developer</h2>
+				<p>The project source lives under <code>src/</code>. To run tests and build the extension use the repository scripts in <code>package.json</code>.</p>
+				<pre><code>yarn install
+yarn test
+yarn build</code></pre>
+			</section>
+
+			<section>
+				<h2>MQTT & Integration</h2>
+				<p>Topics and integration points are documented in <code>docs/DEVELOPER_GUIDE.md</code>. The public MQTT topic prefix is <code>web-buddy/{clientId}/...</code>.</p>
+			</section>
+
+			<footer>
+				<p>Open source — © 2018–2025 Web Buddy</p>
+			</footer>
+		</main>
+	</body>
+</html>

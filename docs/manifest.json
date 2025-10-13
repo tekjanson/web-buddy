@@ -1,15 +1,15 @@
 {
-  "short_name": "Robotcorder Page",
-  "name": "Robotcorder Github Page",
+  "short_name": "WebBuddy",
+  "name": "Web Buddy Documentation",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#37474f",
+  "background_color": "#ffffff",
   "icons": [
     {
       "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
+      "sizes": "48x48",
       "type": "image/x-icon"
     }
-  ],
-  "start_url": "./index.html",
-  "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  ]
 }

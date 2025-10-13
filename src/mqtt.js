@@ -18,8 +18,8 @@ function initMqttIfEnabled() {
         return;
       }
 
-      const clientId = broker.clientId || `robotcorder-${Date.now()}`;
-      const mqttPrefix = `robotcorder/${clientId}`;
+  const clientId = broker.clientId || `web-buddy-${Date.now()}`;
+  const mqttPrefix = `web-buddy/${clientId}`;
       updateState({ mqttPrefix });
 
       const bridgeCfg = {

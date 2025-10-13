@@ -29,7 +29,7 @@ describe('robot-translator', () => {
 
       const expected = '*** Settings ***'
         + '\nDocumentation     A test suite with a single test for some_title'
-        + "\n...               Created by hats' Robotcorder"
+    + "\n...               Created by hats' Web Buddy"
         + '\nLibrary           Selenium2Library    timeout=10'
         + '\n\n*** Variables ***'
         + '\n${BROWSER}    chrome'

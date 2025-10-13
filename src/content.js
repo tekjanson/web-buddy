@@ -1,17 +1,17 @@
 /* global document chrome scanner */
 
-// content.js - clearer, modular content script for Robotcorder
+// content.js - clearer, modular content script for Web Buddy
 // Responsibilities:
 // - Listen for start/stop/scan messages from the extension UI
 // - Record user actions (click, change, hover) using the locator `scanner`
 // - Forward recorded actions to the background script
 
-console.debug('[Robotcorder content] Script execution started.');
+console.debug('[WebBuddy content] Script execution started.');
 
-if (window.__robotcorder_content_injected) {
-  console.debug('[Robotcorder content] already injected, skipping');
+if (window.__web_buddy_content_injected) {
+  console.debug('[WebBuddy content] already injected, skipping');
 } else {
-  window.__robotcorder_content_injected = true;
+  window.__web_buddy_content_injected = true;
 
   (function contentScriptModule() {
     const host = chrome;
@@ -20,7 +20,7 @@ if (window.__robotcorder_content_injected) {
 
 function now() { return Date.now(); }
 
-function debugLog(...args) { try { if (typeof rcLog !== 'undefined') rcLog('debug', ...args); } catch (e) {} console.debug('[Robotcorder content]', ...args); }
+function debugLog(...args) { try { if (typeof rcLog !== 'undefined') rcLog('debug', ...args); } catch (e) {} console.debug('[WebBuddy content]', ...args); }
 
 function isChangeType(type) { return ['text', 'file', 'select'].includes(type); }
 
@@ -100,7 +100,7 @@ function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 2
   const start = Date.now();
   let attempts = 0;
   const maxAttempts = Math.max(1, Math.ceil(timeout / Math.max(1, interval)) + 2);
-  try { window.__robotcorder_last_selector_suggestions = null; } catch (e) {}
+  try { window.__web_buddy_last_selector_suggestions = null; } catch (e) {}
   return new Promise((resolve) => {
     const timer = setInterval(() => {
       attempts += 1;
@@ -170,7 +170,7 @@ function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 2
               }
               const suggestionPayload = (candidates.length ? candidates.slice(0, 5).map(c => ({ xpath: getXPathForElement(c.element), text: c.text })) : []);
               debugLog('waitForElement suggestions', suggestionPayload);
-              try { window.__robotcorder_last_selector_suggestions = suggestionPayload; } catch (e) { /* ignore */ }
+              try { window.__web_buddy_last_selector_suggestions = suggestionPayload; } catch (e) { /* ignore */ }
               try { host.runtime.sendMessage({ operation: 'selector_suggestions', original: xpath, textFallback, suggestions: suggestionPayload }); } catch (e) { debugLog('failed to send selector_suggestions', e); }
             } catch (e) { debugLog('waitForElement suggestion building failed', e); }
           }
@@ -309,7 +309,7 @@ function executeCommands(cmds) {
                 else {
                   // try cached suggestions first (fast)
                   try {
-                    const sugg = window.__robotcorder_last_selector_suggestions || [];
+                    const sugg = window.__web_buddy_last_selector_suggestions || [];
                     for (let s = 0; s < sugg.length && !success; s++) {
                       try {
                         const xp = sugg[s].xpath;

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Robotcorder",
+  "name": "Web Buddy",
   "version": "0.4.0",
-  "homepage_url": "https://github.com/tekjanson/Robotcorder",
+  "homepage_url": "https://github.com/tekjanson/Web-Buddy",
   "description": "A Robot that records user action and scans the page to generate RobotFramework test scripts (beta)",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"

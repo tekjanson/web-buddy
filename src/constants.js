@@ -1,4 +1,4 @@
-const url = 'https://github.com/tekjanson/Robotcorder';
+const url = 'https://github.com/tekjanson/Web-Buddy';
 
 const tab = { active: true, currentWindow: true };
 
@@ -20,7 +20,7 @@ const statusMessage = {
   pom: 'Opening file explorer...'// message displayed after button was clicked
 };
 
-const instruction = 'Robotcorder\n'
+const instruction = 'Web Buddy\n'
   + '\n'
   + 'Generate your RobotFramework Test Script via\n'
   + '* Record user actions\n'
@@ -31,6 +31,6 @@ const instruction = 'Robotcorder\n'
   + 'Automating test automation 🤗';
 
 
-const error = 'Robotcorder\n'
+const error = 'Web Buddy\n'
   + ' you have hit a error\n'
   + ' reset focus to a valid tab and start again';

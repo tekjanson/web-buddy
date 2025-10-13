@@ -10,8 +10,8 @@
 const _host = (typeof host !== 'undefined') ? host : (typeof chrome !== 'undefined' ? chrome : undefined);
 
 function parsePomText(text) {
-  const start = '#robotcorder start';
-  const stop = '#robotcorder stop';
+  const start = '#web-buddy start';
+  const stop = '#web-buddy stop';
   const source = '#sourceLocation:';
   const arr = [];
   let mySourceString = '';
@@ -162,7 +162,7 @@ function initPomUI() {
 }
 
 // Export small public API for use in UI pages
-window.RobotcorderPom = {
+window.WebBuddyPom = {
   init: initPomUI,
   parse: parsePomText,
   createInput: createHiddenFileInput
@@ -181,11 +181,11 @@ try {
 // Remote entry loader: loads a remoteEntry.js URL stored in chrome.storage.local.remote_entry_url
 // Module Federation / Remote entry support removed.
 // No runtime remote-loading helpers are provided in this build. We keep
-// small no-op stubs on window.RobotcorderPom to avoid caller errors.
-window.RobotcorderPom = Object.assign(window.RobotcorderPom || {}, {});
+// small no-op stubs on window.WebBuddyPom to avoid caller errors.
+window.WebBuddyPom = Object.assign(window.WebBuddyPom || {}, {});
 
 // Helper: build nested Providers from exported module contexts
-// React rendering support removed: Robotcorder will no longer attempt to create
+// React rendering support removed: Web Buddy will no longer attempt to create
 // React Provider trees or render React components. Remainings of Module
 // Federation mounting will call exposed modules as plain mount/render
 // functions (signature: mount(target, mountProps) or render(target, mountProps)).
@@ -197,7 +197,7 @@ window.RobotcorderPom = Object.assign(window.RobotcorderPom || {}, {});
 // mountFederated: A best-effort helper that reads the configured remote container and exposed
 // module from storage and attempts to initialize Module Federation container and render into
 // an element with id 'remote-root'. It expects the remote to expose an init and the module.
-// Usage: RobotcorderPom.mountFederated(callback)
+// Usage: WebBuddyPom.mountFederated(callback)
 // removed mountFederated
 
 // autodiscoverExposes: probe ESM remote and container for candidate expose names

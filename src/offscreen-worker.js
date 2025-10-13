@@ -10,7 +10,7 @@
 const host = (typeof chrome !== 'undefined') ? chrome : (typeof browser !== 'undefined' ? browser : {});
 
 function debug(...args) {
-  console.debug('[Robotcorder Offscreen]', ...args);
+  console.debug('[WebBuddy Offscreen]', ...args);
 }
 
 async function handleMessage(request) {

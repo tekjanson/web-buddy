@@ -31,7 +31,7 @@ if (typeof translator === 'undefined') {
 
       return `${'*** Settings ***'
       + `\nDocumentation     A test suite with a single test for ${list && list[0] ? list[0].title : 'unnamed'}`
-      + "\n...               Created by hats' Robotcorder"
+  + "\n...               Created by hats' Web Buddy"
       + '\nLibrary           Selenium2Library    timeout=10'}${
         libs
       }\n\n*** Variables ***`
