@@ -355,17 +355,14 @@ function handleMessage(request, sender, sendResponse) {
               return sendResponse({ error: 'No Gemini API key configured.' });
             }
 
-            await setupOffscreenDocument(); // Ensure offscreen document is ready
-            const callId = generateCallId();
-            bgDebug('Prepared Gemini offscreen call, callId=', callId, 'requestId=', requestId);
-            // Wait briefly for the offscreen document to signal readiness.
-            const offscreenOk = await waitForOffscreenReady(1200);
+            const offscreenOk = await setupOffscreenDocument(); // Ensure offscreen document is ready
             if (!offscreenOk) {
-              // Offscreen didn't signal readiness in time. Fail fast to caller.
-              offscreenApiCallCallbacks.delete(callId);
               bgDebug('Offscreen document did not become ready for callId=', callId);
               return sendResponse({ requestId, error: 'Offscreen document not ready' });
             }
+
+            const callId = generateCallId();
+            bgDebug('Prepared Gemini offscreen call, callId=', callId, 'requestId=', requestId);
 
             offscreenApiCallCallbacks.set(callId, (resp) => {
               bgDebug('Offscreen callback invoked for callId=', callId, 'resp=', resp && (resp.success ? 'success' : 'error'));
@@ -587,13 +584,11 @@ function handleMessage(request, sender, sendResponse) {
           return;
         }
         try {
-          await setupOffscreenDocument(); // Ensure offscreen document is ready
-            // Wait briefly for the offscreen document to signal readiness.
-            const offscreenOk = await waitForOffscreenReady(1200);
-            if (!offscreenOk) {
-              sendResponse({ success: false, error: 'Offscreen document not ready' });
-              return;
-            }
+          const offscreenOk = await setupOffscreenDocument(); // Ensure offscreen document is ready
+          if (!offscreenOk) {
+            sendResponse({ success: false, error: 'Offscreen document not ready' });
+            return;
+          }
           const callId = generateCallId();
           // Store callback to be invoked when offscreen responds
           offscreenApiCallCallbacks.set(callId, (resp) => {
