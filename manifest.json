@@ -31,7 +31,28 @@
   }],
   "web_accessible_resources": [
     {
-      "resources": ["src/pom.js"],
+      "resources": [
+        "src/pom.js",
+        "src/offscreen-worker.js",
+        "src/offscreen.html",
+        "src/constants.js",
+        "src/messages.js",
+        "src/translator/cypress-translator.js",
+        "src/translator/mqtt-translator.js",
+        "src/translator/playwright-translator.js",
+        "src/translator/selenium-translator.js",
+        "src/translator/index.js",
+        "src/executor.js",
+        "vendors/mqtt.min.js",
+        "src/mqtt/bridge.js",
+        "src/state.js",
+        "src/utils.js",
+        "src/messaging.js",
+        "src/offscreen.js",
+        "src/mqtt.js",
+        "src/handlers.js",
+        "src/background-core.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ],
@@ -45,6 +66,6 @@
     "48": "assets/logo-48.png",
     "128": "assets/logo-128.png"
   },
-  "permissions": ["activeTab", "downloads", "storage", "scripting"],
+  "permissions": ["activeTab", "downloads", "storage", "scripting", "offscreen"],
   "host_permissions": ["<all_urls>"]
 }

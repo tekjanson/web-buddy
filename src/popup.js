@@ -105,10 +105,14 @@ function toggle(e) {
 
     $('#sortable').sortable('disable');
   } else if (e.target.id === 'stop' || e.target.id === 'scan') {
-    show(['record', 'scan', 'pom'], true); // add pom?
-    show(['resume', 'stop', 'pause'], false);
-    enable(['settings-panel'], true);
-
+    // If scan was just clicked, it might be entering page context mode.
+    // The background will update the state, and the UI will be refreshed via storage listener.
+    // For now, just handle the 'stop' case.
+    if (e.target.id === 'stop') {
+      show(['record', 'scan', 'pom'], true);
+      show(['resume', 'stop', 'pause'], false);
+      enable(['settings-panel'], true);
+    }
     $('#sortable').sortable('enable');
   } else if (e.target.id === 'pom') {
     // added so only specific buttons will be available during the POM import
@@ -119,14 +123,21 @@ function toggle(e) {
     analytics(['_trackEvent', 'settings', '⚙️']);
     document.getElementById('settings-panel').classList.toggle('hidden');
   }
+  // Update save button state
+  const saveBtn = document.getElementById('save');
+  if (!saveBtn) return;
 
-  if (e.canSave === false || e.target.id === 'record') {
-    document.getElementById('save').disabled = true;
-  } else if (
-    e.canSave === true
-    || e.target.id === 'scan'
-    || e.target.id === 'stop'
-  ) {
+  if (e.pageContextMode) {
+    // In page context mode, recording is paused, but we don't have a savable script until stop.
+    saveBtn.disabled = true;
+    return;
+  }
+
+  if (e.canSave === false || e.target.id === 'record' || e.target.id === 'resume') {
+    saveBtn.disabled = true;
+  } else if (e.canSave === true || e.target.id === 'stop') {
+    // The original scan operation made the script savable immediately.
+    // The new scan toggle mode does not, so we only enable save on stop.
     document.getElementById('save').disabled = false;
   }
   if (e.demo) {
@@ -144,12 +155,70 @@ function busy(e) {
     });
   }
 }
-
+function updateScanButton(isPageContextMode) {
+  const scanBtn = document.getElementById('scan');
+  if (!scanBtn) return;
+  scanBtn.textContent = isPageContextMode ? 'Stop Scan' : 'Scan';
+}
 function operation(e) {
   if (e.target.id === 'pom') {
     // Open the lightweight POM helper window (legacy UI)
     window.open($host.runtime.getURL('./src/background.html'), 'pom-helper', 'width=400,height=400');
   }
+
+  // The new scan logic is handled client-side in the popup, so we don't send a message to background.
+  if (e.target.id === 'scan') {
+    const scanBtn = document.getElementById('scan');
+    const originalText = scanBtn.textContent;
+    const scriptToInject = 'src/content.js';
+
+    scanBtn.textContent = 'Scanning...';
+    scanBtn.disabled = true;
+
+    const resetScanButton = () => {
+      scanBtn.textContent = originalText;
+      scanBtn.disabled = false;
+    };
+
+    $host.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs || !tabs[0] || !tabs[0].id) {
+        document.getElementById('textarea-script').value = 'Error: Could not find active tab to scan.';
+        resetScanButton();
+        return;
+      }
+      const tabId = tabs[0].id;
+
+      // Ensure content script is injected before sending a message.
+      // This uses the modern scripting API for MV3, with a fallback.
+      const injectionCallback = () => {
+        const lastErr = $host.runtime.lastError;
+        if (lastErr) {
+          // Injection can fail on special pages (chrome://, etc.)
+          document.getElementById('textarea-script').value = `Cannot scan this page.\nError: ${lastErr.message}`;
+          resetScanButton();
+          return;
+        }
+
+        // Now that we know the script is there, send the message.
+        $host.tabs.sendMessage(tabId, { operation: 'get_dom_for_scan' }, (response) => {
+          if ($host.runtime.lastError) {
+            document.getElementById('textarea-script').value = `Scan failed.\nError: ${$host.runtime.lastError.message}`;
+          } else if (response && response.html) {
+            document.getElementById('textarea-script').value = response.html;
+          }
+          resetScanButton();
+        });
+      };
+
+      if ($host.scripting && $host.scripting.executeScript) {
+        $host.scripting.executeScript({ target: { tabId }, files: [scriptToInject] }, injectionCallback);
+      } else {
+        $host.tabs.executeScript(tabId, { file: scriptToInject }, injectionCallback);
+      }
+    });
+    return;
+  }
+
   toggle(e);
   const locators = $('#sortable').sortable('toArray', { attribute: 'id' });
   // Use a safe wrapper to avoid "The message port closed before a response was received." when
@@ -231,6 +300,95 @@ function like() {
 document.addEventListener(
   'DOMContentLoaded',
   () => {
+    // AI provider badge: show which provider is active (mqtt or gemini)
+    function updateAiProviderBadge(provider) {
+      try {
+        const badge = document.getElementById('ai-provider-badge');
+        if (!badge) return;
+        const p = provider || 'unknown';
+        badge.textContent = `AI: ${p}`;
+        if (p === 'gemini') {
+          badge.style.background = '#10b981'; // green
+        } else if (p === 'mqtt') {
+          badge.style.background = '#6366f1'; // indigo
+        } else {
+          badge.style.background = '#6b7280'; // gray
+        }
+      } catch (e) {}
+    }
+
+    // Load initial provider value
+    try { storage.get({ ai_provider: 'mqtt' }, (s) => updateAiProviderBadge(s.ai_provider)); } catch (e) {}
+
+    // Make badge clickable: click to toggle provider (mqtt <-> gemini); shift-click opens options
+    try {
+      const badge = document.getElementById('ai-provider-badge');
+      if (badge) {
+        badge.title = 'Click to toggle AI provider (Shift+click opens Options)';
+        badge.style.cursor = 'pointer';
+        badge.addEventListener('click', (ev) => {
+          try {
+            if (ev.shiftKey) { // open options when Shift-clicked
+              try { $host.runtime.openOptionsPage(); } catch (e) { $host.tabs.create({ url: $host.runtime.getURL('src/options.html') }); }
+              return;
+            }
+            storage.get({ ai_provider: 'mqtt' }, (s2) => {
+              const cur = (s2 && s2.ai_provider) || 'mqtt';
+              const next = cur === 'mqtt' ? 'gemini' : 'mqtt';
+              storage.set({ ai_provider: next }, () => {
+                updateAiProviderBadge(next);
+                const respDiv = document.getElementById('chat-response');
+                if (respDiv) respDiv.textContent = `AI provider switched to ${next}`;
+              });
+            });
+          } catch (e) { /* ignore */ }
+        });
+      }
+    } catch (e) {}
+
+    // Update badge live when storage changes
+    $host.storage.onChanged.addListener((changes) => {
+      if (changes.ai_provider) updateAiProviderBadge(changes.ai_provider.newValue);
+    });
+
+    // Share UI steps badge: show whether it's active
+    function updateShareStepsBadge(isShared) {
+      try {
+        const badge = document.getElementById('share-ui-steps-badge');
+        if (!badge) return;
+        badge.textContent = isShared ? 'UI Steps: On' : 'UI Steps: Off';
+        if (isShared) {
+          badge.style.background = '#10b981'; // green
+        } else {
+          badge.style.background = '#6b7280'; // gray
+        }
+      } catch (e) {}
+    }
+
+    // Load initial share_ui_steps value
+    try { storage.get({ share_ui_steps: false }, (s) => updateShareStepsBadge(!!(s && s.share_ui_steps))); } catch (e) {}
+
+    // Make badge clickable to toggle sharing
+    try {
+      const badge = document.getElementById('share-ui-steps-badge');
+      if (badge) {
+        badge.title = 'Click to toggle sharing UI steps with AI';
+        badge.style.cursor = 'pointer';
+        badge.addEventListener('click', () => {
+          try {
+            storage.get({ share_ui_steps: false }, (s) => {
+              const current = !!(s && s.share_ui_steps);
+              const next = !current;
+              storage.set({ share_ui_steps: next }, () => updateShareStepsBadge(next));
+            });
+          } catch (e) { /* ignore */ }
+        });
+      }
+    } catch (e) {}
+
+    // Update share badge live when storage changes
+    $host.storage.onChanged.addListener((changes) => { if (changes.share_ui_steps) updateShareStepsBadge(changes.share_ui_steps.newValue); });
+
     // chrome.storage.local.get(/* String or Array */ ["pom"], function (items) {
     //   //  items = [ { "phasersTo": "awesome" } ]
     //   var arr = JSON.parse(items.pom);
@@ -315,7 +473,8 @@ document.addEventListener(
         isBusy: false,
         demo: false,
         verify: false,
-        locators: []
+        locators: [],
+        pageContextMode: false
       },
       (state) => {
         display({ message: state.message });
@@ -326,6 +485,8 @@ document.addEventListener(
           demo: state.demo,
           verify: state.verify
         });
+        // Update scan button text based on pageContextMode
+        updateScanButton(state.pageContextMode);
         setTimeout(() => {
           const sortable = document.getElementById('sortable');
           state.locators.forEach((locator) => {
@@ -457,14 +618,6 @@ document.addEventListener(
       document.getElementById(id).addEventListener('change', settings);
     });
 
-    // persist share-ui-steps changes when user toggles in popup settings
-    const popupShareEl = document.getElementById('share-ui-steps');
-    if (popupShareEl) {
-      popupShareEl.addEventListener('change', () => {
-        try { storage.set({ share_ui_steps: !!popupShareEl.checked }); } catch (e) {}
-      });
-    }
-
     document.getElementById('like').addEventListener('click', like);
     document.getElementById('info').addEventListener('click', info);
     document.getElementById('settings').addEventListener('click', toggle);
@@ -560,11 +713,49 @@ document.addEventListener(
                 }
                 if (!friendly && reply && reply.payload && typeof reply.payload === 'string') friendly = reply.payload;
                 if (!friendly && reply && reply.response) friendly = reply.response;
-                if (!friendly) friendly = '[Received non-text reply — open devtools or enable raw view for details]';
+                if (!friendly) {
+                  // Provide a helpful, actionable fallback and surface raw JSON for debugging.
+                  friendly = 'Received a non-text reply from the AI. Click "Show details" to view raw JSON and diagnostics.';
+                  try {
+                    if (rawEl) rawEl.classList.remove('hidden');
+                  } catch (e) {}
 
-                // render assistant bubble and friendly text
-                renderChatMessage('assistant', friendly);
-                respDiv.textContent = friendly;
+                  // render assistant bubble with the short friendly message
+                  renderChatMessage('assistant', friendly);
+
+                  // Render a Show details link that toggles the raw JSON view
+                  try {
+                    // Clear and build interactive response content
+                    respDiv.innerHTML = '';
+                    const textNode = document.createTextNode(friendly + ' ');
+                    respDiv.appendChild(textNode);
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.id = 'chat-show-details';
+                    link.textContent = 'Show details';
+                    link.style.marginLeft = '8px';
+                    link.addEventListener('click', (ev) => {
+                      ev.preventDefault();
+                      if (!rawEl) return;
+                      const hidden = rawEl.classList.contains('hidden');
+                      if (hidden) {
+                        rawEl.classList.remove('hidden');
+                        link.textContent = 'Hide details';
+                      } else {
+                        rawEl.classList.add('hidden');
+                        link.textContent = 'Show details';
+                      }
+                    });
+                    respDiv.appendChild(link);
+                  } catch (e) {
+                    // Fall back to plain text if DOM manipulation fails
+                    respDiv.textContent = friendly;
+                  }
+                } else {
+                  // render assistant bubble and friendly text
+                  renderChatMessage('assistant', friendly);
+                  respDiv.textContent = friendly;
+                }
               } catch (e) { respDiv.textContent = String(reply); }
             });
             });
@@ -582,6 +773,12 @@ $host.storage.onChanged.addListener((changes, _) => {
   for (const key in changes) {
     if (key === 'isBusy') busy({ isBusy: changes.isBusy.newValue });
     if (key === 'message') display({ message: changes.message.newValue });
+    if (key === 'pageContextMode') {
+      updateScanButton(changes.pageContextMode.newValue);
+    }
+    if (key === 'share_ui_steps') {
+      // This is handled by the new badge logic, but keeping for safety.
+    }
   }
 });
 

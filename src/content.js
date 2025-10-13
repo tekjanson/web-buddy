@@ -6,6 +6,8 @@
 // - Record user actions (click, change, hover) using the locator `scanner`
 // - Forward recorded actions to the background script
 
+console.debug('[Robotcorder content] Script execution started.');
+
 if (window.__robotcorder_content_injected) {
   console.debug('[Robotcorder content] already injected, skipping');
 } else {
@@ -350,14 +352,53 @@ function executeCommands(cmds) {
   }());
 }
 
+function getPrunedDom() {
+  try {
+    const doc = document.cloneNode(true);
+    // Remove non-essential tags to reduce token count for the AI
+    const tagsToRemove = ['script', 'style', 'link', 'meta', 'path', 'svg'];
+    tagsToRemove.forEach(tag => {
+      doc.querySelectorAll(tag).forEach(el => el.remove());
+    });
+    // Remove large attributes
+    doc.querySelectorAll('*').forEach(el => {
+      for (let i = el.attributes.length - 1; i >= 0; i--) {
+        const attr = el.attributes[i];
+        // Remove attributes that are often very long and not useful for identification
+        if (['d', 'points', 'style', 'class'].includes(attr.name.toLowerCase()) || attr.name.startsWith('data-test')) {
+          // Keep class if it's short, otherwise remove
+          if (attr.name.toLowerCase() === 'class' && attr.value.length < 100) continue;
+          el.removeAttribute(attr.name);
+        }
+      }
+    });
+    return doc.documentElement.outerHTML;
+  } catch (e) {
+    return `Error pruning DOM: ${e.message}`;
+  }
+}
 // Handle messages from extension UI / background
+debugLog('Adding runtime.onMessage listener...');
 host.runtime.onMessage.addListener((request, sender, sendResponse) => {
   debugLog('content script received message', request, sender && sender.tab && sender.tab.id);
-  if (request && request.type === 'handshake') { debugLog('content script responding pong to handshake from sender', sender && sender.tab && sender.tab.id); sendResponse({ pong: true }); return true; }
+  if (request && request.type === 'handshake') {
+    debugLog('Responding PONG to handshake.');
+    sendResponse({ pong: true });
+    return true; // Keep channel open for async response
+  }
   if (request.operation === 'record') { locatorStrategies = (request.locators || []).slice(); locatorStrategies.push('index'); attachRecordingListeners(); debugLog('received record operation, locatorStrategies', locatorStrategies); }
   else if (request.operation === 'stop') { detachRecordingListeners(); debugLog('received stop operation'); }
   else if (request.operation === 'execute_commands') { const cmds = request.commands || []; debugLog('execute_commands received', cmds && cmds.length); executeCommands(cmds); }
   else if (request.operation === 'scan') { locatorStrategies = (request.locators || []).slice(); locatorStrategies.push('index'); detachRecordingListeners(); scanner.limit = 1000; const scripts = scanner.parseNodes([], document.body, locatorStrategies); sendAction(scripts); }
+  else if (request.operation === 'get_page_html') {
+    const prunedHtml = getPrunedDom();
+    sendResponse({ html: prunedHtml });
+    return true; // Indicate async response
+  } else if (request.operation === 'get_dom_for_scan') {
+    const prunedHtml = getPrunedDom();
+    sendResponse({ html: prunedHtml });
+    return true; // Indicate async response
+  }
 });
 
 // Notify background we were injected (used for load state / handshake)

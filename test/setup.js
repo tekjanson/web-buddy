@@ -26,7 +26,13 @@ chrome = {
   storage: {
     local: {
       set: () => {},
-      get: () => {}
+      get: () => {},
+      onChanged: { addListener: () => {} }
     }
-  }
+  },
+  runtime: {
+    lastError: null,
+    sendMessage: () => {}
+  },
+  offscreen: { createDocument: () => {} }
 };
