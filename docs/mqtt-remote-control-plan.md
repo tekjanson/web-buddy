@@ -152,9 +152,9 @@ Extras (future):
 
 ## File-level blueprint for this repo
 (Where to add/edit in the current workspace)
-- `src/mqtt/bridge.js` — extend to handle new topic patterns and route to `background.js` messaging APIs.
+- `src/mqtt/bridge.js` — extend to handle new topic patterns and route to the service worker/background messaging APIs (see `src/background-sw.js` and `src/background-core.js`).
 - `src/mqtt/mqtt-translator.js` or `mqtt/bridge.js` — add helper functions to serialize/deserialize the new protocol.
-- `background.js` / `background-core.js` — ensure the background script runs the MQTT client and forwards commands to tabs; also handles clientId and persistent state.
+- `background-core.js` / `background-sw.js` — ensure the service worker loads the MQTT client and forwards commands to tabs; also handles clientId and persistent state.
 - `content.js` — add command handler to receive `getDOM`, `click`, `fill`, `navigate`, `screenshot` requests and respond via runtime messaging.
 - `offscreen-worker.js` — optionally handle heavy snapshotting or DOM operations when tab not visible.
 - `messaging.js` — add helpers for request/response correlation within the extension.

@@ -161,9 +161,10 @@ function updateScanButton(isPageContextMode) {
   scanBtn.textContent = isPageContextMode ? 'Stop Scan' : 'Scan';
 }
 function operation(e) {
-  if (e.target.id === 'pom') {
-    // Open the lightweight POM helper window (legacy UI)
-    window.open($host.runtime.getURL('./src/background.html'), 'pom-helper', 'width=400,height=400');
+    if (e.target.id === 'pom') {
+    // Open the options page instead of legacy background helper (MV2 UI removed)
+    try { $host.runtime.openOptionsPage(); } catch (err) { $host.tabs.create({ url: $host.runtime.getURL('src/options.html') }); }
+    return;
   }
 
   // The new scan logic is handled client-side in the popup, so we don't send a message to background.
@@ -405,11 +406,8 @@ document.addEventListener(
 
     //     activities.addEventListener("onchange", function()
     $('#keywordSelect').change((select) => {
-      const popupWindow = window.open(
-        $host.runtime.getURL('./src/background.html'),
-        'exampleName',
-        'width=400,height=400'
-      );
+      // Legacy helper popup removed; open options page as a replacement
+      try { $host.runtime.openOptionsPage(); } catch (err) { $host.tabs.create({ url: $host.runtime.getURL('src/options.html') }); }
 
       //   var killDiv = document.getElementById("tempDiv");
       //   if (killDiv !== null) {

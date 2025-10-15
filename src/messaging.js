@@ -56,7 +56,7 @@ function ensureContentInjected(tabId, cb) {
       callback(err);
     });
   } else {
-    // Fallback for older environments (like MV2 or testing shims)
+    // Fallback for older environments or test shims where `scripting.executeScript` isn't available
     host.tabs.executeScript(tabId, { file: 'src/content.js' }, () => callback(host.runtime.lastError || null));
   }
 }

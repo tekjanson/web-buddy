@@ -23,7 +23,7 @@ var libSource = [];
 var script;
 var storage = host.storage.local;
 var content = host.tabs;
-var icon = host.action || host.browserAction || { setIcon: () => {} };
+var icon = host.action || { setIcon: () => {} };
 var maxLength = 5000;
 var recordTab = 0;
 var demo = false;
