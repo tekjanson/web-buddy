@@ -723,7 +723,22 @@
       ];
       let instruction = fewShot + '\n' + instructionLines.join('\n');
       if (userGoal && String(userGoal).trim()) {
-        instruction = 'Goal: ' + String(userGoal).trim() + '\n\n' + instruction;
+        // Stronger goal-first prompt shaping: mark goal as high priority and
+        // give explicit behavioral hints so the assistant returns actions that
+        // directly target the user's intent. Keep it concise to fit preview.
+        const g = String(userGoal).trim();
+        const gTokens = g.split(/\s+/).map(t => t.replace(/[^\w.-]/g, '')).filter(Boolean);
+        const terms = gTokens.slice(0, 5).join(', ') || g;
+        const goalPrefixLines = [
+          `Goal: ${g}`,
+          'Priority: CRITICAL — prioritize actions that achieve this goal. Only return actions that help accomplish it.',
+          'Guidance:',
+          `- Prefer clicking visible links or buttons whose text contains these keywords: ${terms}.`,
+          '- If no obvious target exists on this page, include a navigate action to a likely URL (for example, a repository CHANGELOG.md) or a search result page.',
+          "- For each action include selector, selector_type, textFallback (if selector is uncertain), retries, and a confidence score.",
+          "- Reply only with a JSON array inside a single ```json``` code block; do not include explanations."
+        ];
+        instruction = goalPrefixLines.join('\n') + '\n\n' + instruction;
       }
 
     // request structured summary if possible
@@ -842,7 +857,7 @@
             try {
               const goalText = userGoal && String(userGoal).trim() ? String(userGoal).trim() : null;
               const domLower = domPart ? String(domPart).toLowerCase() : '';
-              if (goalText && domLower && domLower.indexOf(goalText.toLowerCase()) !== -1) {
+              if (goalText && domLower) {
                 // helper to quote text for XPath
                 const quoteForXPath = (s) => {
                   if (s.indexOf("'") === -1) return "'" + s + "'";
@@ -852,10 +867,49 @@
                 };
                 const goalLower = goalText.toLowerCase();
                 const q = quoteForXPath(goalLower);
-                const xpath = `//a[contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), ${q})] | //button[contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), ${q})] | //*[contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), ${q})]`;
-                const fallback = [{ action: 'click', selector: xpath, selector_type: 'xpath', textFallback: goalText, confidence: 0.3 }];
-                logToUI(respDiv, 'No actions from AI — created a fallback click suggestion based on your goal and page content', 'debug');
-                showActionsPreview(fallback, autoText || text, respDiv);
+
+                const candidates = [];
+                // Preferred: click a link or button that contains the goal text
+                const xpathLinkBtn = `//a[contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), ${q})] | //button[contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), ${q})]`;
+                if (domLower.indexOf(goalLower) !== -1) {
+                  candidates.push({ action: 'click', selector: xpathLinkBtn, selector_type: 'xpath', textFallback: goalText, confidence: 0.75, retries: 3 });
+                }
+
+                // Broader: any element that contains the goal text
+                const xpathAny = `//*[contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), ${q})]`;
+                candidates.push({ action: 'click', selector: xpathAny, selector_type: 'xpath', textFallback: goalText, confidence: 0.35, retries: 3 });
+
+                // If we have a page summary with a GitHub repo URL, propose navigations to likely CHANGELOG locations
+                try {
+                  if (pageSummary && pageSummary.url) {
+                    try {
+                      const u = new URL(pageSummary.url);
+                      if (u.hostname === 'github.com') {
+                        const parts = u.pathname.split('/').filter(Boolean);
+                        if (parts.length >= 2) {
+                          const repoRoot = `${u.protocol}//${u.hostname}/${parts[0]}/${parts[1]}`;
+                          const changelogUrls = [
+                            `${repoRoot}/blob/master/CHANGELOG.md`,
+                            `${repoRoot}/blob/main/CHANGELOG.md`,
+                            `${repoRoot}/raw/master/CHANGELOG.md`,
+                            `${repoRoot}/raw/main/CHANGELOG.md`,
+                            `${repoRoot}/CHANGELOG.md`
+                          ];
+                          const seen = new Set();
+                          changelogUrls.forEach((cu) => {
+                            if (!seen.has(cu)) {
+                              candidates.push({ action: 'navigate', selector: '', selector_type: 'css', value: cu, confidence: 0.45 });
+                              seen.add(cu);
+                            }
+                          });
+                        }
+                      }
+                    } catch (e) { /* ignore URL parsing errors */ }
+                  }
+                } catch (e) { /* ignore */ }
+
+                logToUI(respDiv, 'No actions from AI — created fallback suggestions based on your goal and page content', 'debug');
+                showActionsPreview(candidates, autoText || text, respDiv);
                 return;
               }
             } catch (e) { /* ignore fallback errors */ }
