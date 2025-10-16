@@ -10,5 +10,15 @@ label{display:block;margin:6px 0;color:var(--muted)}
 
 input[type="text"],input[type="password"],select{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--muted)}
 button#reset,button#update{padding:8px 10px;border-radius:8px}
+.btn{cursor:pointer}
+
+/* Focus styles for keyboard users */
+input:focus, select:focus, button:focus {
+	outline: 3px solid rgba(81, 203, 238, 0.6);
+	outline-offset: 2px;
+}
+
+/* Make controls full width on narrow screens */
+.grid-container > input, .grid-container > select, .grid-container > button { width: 100%; }
 
 @media (max-width:640px){.grid-container{grid-template-columns:1fr}.panel-options{padding:10px}}

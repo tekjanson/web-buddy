@@ -87,6 +87,15 @@
 
         <button
           class="btn btn-wide"
+          id="ai-assist"
+          tabindex="-1"
+          title="Have the AI suggest actions for this page"
+        >
+          AI Assist
+        </button>
+
+        <button
+          class="btn btn-wide"
           id="pom"
           tabindex="-1"
           title="open page object model file"
@@ -190,7 +199,10 @@
       ></textarea>
     </div>
 
-    <script src="popup.js"></script>
+  <script src="popup-helpers.js"></script>
+  <script src="popup.js"></script>
+  <script src="popup-ai.js"></script>
+  <script src="popup-chat.js"></script>
     <div id="keywordDiv">
       <!-- <input type="button"> </input> -->
       <!-- <select id="keywordSelect">

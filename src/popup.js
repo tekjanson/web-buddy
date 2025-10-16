@@ -4,162 +4,30 @@ const once = {
   once: true
 };
 
-const $host = (typeof host !== 'undefined') ? host : chrome;
-const storage = $host.storage.local;
-
-/*eslint-disable */
-// Google Analytics removed for extension CSP and privacy reasons.
-// analytics() below is a no-op placeholder to avoid runtime calls.
-/* eslint-enable */
-
-function logger(data) {
-  if (debug) document.getElementById('textarea-log').value = data;
+// Ensure a shared host object is available (popup-helpers.js typically sets window.$host).
+if (typeof window.$host === 'undefined') {
+  window.$host = (typeof host !== 'undefined') ? host : (typeof chrome !== 'undefined' ? chrome : (typeof browser !== 'undefined' ? browser : {}));
 }
-
-function analytics(/* data */) {
-  // no-op: analytics removed
-}
-
-// Chat render helpers
-function renderChatMessage(who, text) {
-  try {
-    const win = document.getElementById('chat-window');
-    if (!win) return;
-    const bubble = document.createElement('div');
-    bubble.classList.add('chat-bubble');
-    bubble.classList.add(who === 'user' ? 'chat-user' : 'chat-assistant');
-    bubble.textContent = text;
-    win.appendChild(bubble);
-    // keep last ~50 messages visible
-    while (win.children.length > 50) win.removeChild(win.children[0]);
-    win.scrollTop = win.scrollHeight;
-  } catch (e) { console.warn('renderChatMessage failed', e); }
-}
-
-const clipboard = new ClipboardJS('#copy');
-
-const copyStatus = (className) => {
-  $('#copy').addClass(className);
-  setTimeout(() => {
-    $('#copy').removeClass(className);
-  }, 3000);
+// Provide a safe storage fallback (minimal stub) to avoid runtime errors in non-browser test envs.
+const storage = (window.$host && window.$host.storage && window.$host.storage.local) ? window.$host.storage.local : {
+  get: (keys, cb) => { try { if (typeof cb === 'function') cb({}); } catch (e) {} },
+  set: () => {},
+  onChanged: { addListener: () => {} }
 };
 
-clipboard.on('success', (e) => {
-  copyStatus('copy-ok');
-  analytics(['_trackEvent', 'copy', 'ok']);
+// Delegate common helpers to popup-helpers.js via window.popupHelpers when available.
+// This keeps popup.js focused on the main popup logic while remaining backwards compatible.
+const logger = (data) => { try { if (window.popupHelpers && window.popupHelpers.logger) return window.popupHelpers.logger(data); } catch (e) {} };
+const analytics = (...args) => { try { if (window.popupHelpers && window.popupHelpers.analytics) return window.popupHelpers.analytics(...args); } catch (e) {} };
+const renderChatMessage = (who, text) => { try { if (window.popupHelpers && window.popupHelpers.renderChatMessage) return window.popupHelpers.renderChatMessage(who, text); } catch (e) {} };
+const display = (message) => { try { if (window.popupHelpers && window.popupHelpers.display) return window.popupHelpers.display(message); } catch (e) {} };
+const show = (array, visible) => { try { if (window.popupHelpers && window.popupHelpers.show) return window.popupHelpers.show(array, visible); } catch (e) {} };
+const enable = (array, isEnabled) => { try { if (window.popupHelpers && window.popupHelpers.enable) return window.popupHelpers.enable(array, isEnabled); } catch (e) {} };
+const toggle = (e) => { try { if (window.popupHelpers && window.popupHelpers.toggle) return window.popupHelpers.toggle(e); } catch (err) {} };
+const busy = (e) => { try { if (window.popupHelpers && window.popupHelpers.busy) return window.popupHelpers.busy(e); } catch (err) {} };
+const updateScanButton = (isPageContextMode) => { try { if (window.popupHelpers && window.popupHelpers.updateScanButton) return window.popupHelpers.updateScanButton(isPageContextMode); } catch (err) {} };
 
-  e.clearSelection();
-});
-
-clipboard.on('error', (e) => {
-  copyStatus('copy-fail');
-  analytics(['_trackEvent', 'copy', 'nok']);
-  if (typeof rcLog !== 'undefined') rcLog('error', 'Clipboard error', e.action, e.trigger);
-});
-
-function display(message) {
-  if (message && message.message) {
-    const field = document.querySelector('#textarea-script');
-    field.value = message.message || '';
-  }
-}
-
-function show(array, visible) {
-  array.forEach((id) => {
-    const element = document.getElementById(id);
-    visible
-      ? element.classList.remove('hidden')
-      : element.classList.add('hidden');
-  });
-}
-
-function enable(array, isEnabled) {
-  array.forEach((id) => {
-    const element = document.getElementById(id);
-    isEnabled
-      ? element.classList.remove('disabled')
-      : element.classList.add('disabled');
-  });
-}
-
-function toggle(e) {
-  logger(e.target.id);
-
-  if (e.target.id === 'record') {
-    show(['stop', 'pause', 'pom'], true);
-    show(['record', 'resume', 'scan'], false);
-    enable(['settings-panel'], false);
-
-    $('#sortable').sortable('disable');
-  } else if (e.target.id === 'pause') {
-    show(['resume', 'stop', 'pom'], true);
-    show(['record', 'scan', 'pause'], false);
-    enable(['settings-panel'], false);
-
-    $('#sortable').sortable('disable');
-  } else if (e.target.id === 'resume') {
-    show(['pause', 'stop', 'pom'], true);
-    show(['record', 'scan', 'resume'], false);
-    enable(['settings-panel'], false);
-
-    $('#sortable').sortable('disable');
-  } else if (e.target.id === 'stop' || e.target.id === 'scan') {
-    // If scan was just clicked, it might be entering page context mode.
-    // The background will update the state, and the UI will be refreshed via storage listener.
-    // For now, just handle the 'stop' case.
-    if (e.target.id === 'stop') {
-      show(['record', 'scan', 'pom'], true);
-      show(['resume', 'stop', 'pause'], false);
-      enable(['settings-panel'], true);
-    }
-    $('#sortable').sortable('enable');
-  } else if (e.target.id === 'pom') {
-    // added so only specific buttons will be available during the POM import
-    // show(["record", "scan", "pom"], true);
-    // show(["resume", "stop", "pause"], false);
-    // enable(["settings-panel"], true);
-  } else if (e.target.id === 'settings') {
-    analytics(['_trackEvent', 'settings', '⚙️']);
-    document.getElementById('settings-panel').classList.toggle('hidden');
-  }
-  // Update save button state
-  const saveBtn = document.getElementById('save');
-  if (!saveBtn) return;
-
-  if (e.pageContextMode) {
-    // In page context mode, recording is paused, but we don't have a savable script until stop.
-    saveBtn.disabled = true;
-    return;
-  }
-
-  if (e.canSave === false || e.target.id === 'record' || e.target.id === 'resume') {
-    saveBtn.disabled = true;
-  } else if (e.canSave === true || e.target.id === 'stop') {
-    // The original scan operation made the script savable immediately.
-    // The new scan toggle mode does not, so we only enable save on stop.
-    document.getElementById('save').disabled = false;
-  }
-  if (e.demo) {
-    document.getElementById('demo').checked = e.demo;
-  }
-  if (e.verify) {
-    document.getElementById('verify').checked = e.verify;
-  }
-}
-
-function busy(e) {
-  if (e.isBusy === true || e.isBusy === false) {
-    ['scan', 'record', 'stop', 'save', 'save', 'resume'].forEach((id) => {
-      document.getElementById(id).disabled = e.isBusy; // add pom?
-    });
-  }
-}
-function updateScanButton(isPageContextMode) {
-  const scanBtn = document.getElementById('scan');
-  if (!scanBtn) return;
-  scanBtn.textContent = isPageContextMode ? 'Stop Scan' : 'Scan';
-}
+// busy and updateScanButton are provided by popup-helpers and delegated via wrappers above.
 function operation(e) {
     if (e.target.id === 'pom') {
     // Open the options page instead of legacy background helper (MV2 UI removed)
@@ -181,13 +49,13 @@ function operation(e) {
       scanBtn.disabled = false;
     };
 
-    $host.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (!tabs || !tabs[0] || !tabs[0].id) {
+    getTargetTab((tab) => {
+      if (!tab || !tab.id) {
         document.getElementById('textarea-script').value = 'Error: Could not find active tab to scan.';
         resetScanButton();
         return;
       }
-      const tabId = tabs[0].id;
+      const tabId = tab.id;
 
       // Ensure content script is injected before sending a message.
       // This uses the modern scripting API for MV3, with a fallback.
@@ -613,6 +481,9 @@ document.addEventListener(
       });
     }
 
+    // AI Assist is initialized from popup-ai.js
+    if (window._wb_initAiAssist) window._wb_initAiAssist();
+
     ['demo', 'verify'].forEach((id) => {
       document.getElementById(id).addEventListener('change', settings);
     });
@@ -621,146 +492,8 @@ document.addEventListener(
     document.getElementById('info').addEventListener('click', info);
     document.getElementById('settings').addEventListener('click', toggle);
 
-      // Chat send handler
-      const chatSend = document.getElementById('chat-send');
-      if (chatSend) {
-        chatSend.addEventListener('click', () => {
-          const input = document.getElementById('chat-input');
-          const respDiv = document.getElementById('chat-response');
-          if (!input || !respDiv) return;
-          const text = input.value && input.value.trim();
-          if (!text) {
-            respDiv.textContent = 'Please enter a message';
-            return;
-          }
-
-          respDiv.textContent = 'Sending...';
-
-              // send chat request to background and await reply
-              try {
-                // read last context tokenId from storage and include it
-                  storage.get({ chat_context: null, share_ui_steps: false }, (s) => {
-                    const ctx = s && s.chat_context ? s.chat_context : null;
-                    const includeSteps = s && s.share_ui_steps;
-                    // when enabled, include the current UI steps as additional context
-                    const uiSteps = includeSteps ? (document.getElementById('textarea-script').value || '') : null;
-                    const outgoing = { operation: 'chat', input: text, context: ctx, ui_steps: uiSteps };
-                  // render user bubble immediately
-                  renderChatMessage('user', text);
-
-                  $host.runtime.sendMessage(outgoing, (reply) => {
-              const lastErr = $host.runtime && $host.runtime.lastError;
-              if (lastErr) {
-                let errText = lastErr.message || String(lastErr);
-                if (lastErr.stack) errText += `\n${lastErr.stack}`;
-                respDiv.textContent = `Chat failed: ${errText}`;
-                // request diagnostics from background
-                try {
-                  $host.runtime.sendMessage({ operation: 'mqtt_status' }, (diagResp) => {
-                    if (!diagResp) return;
-                    if (diagResp.error) {
-                      respDiv.textContent += `\nDiagnostics error: ${diagResp.error}`;
-                      return;
-                    }
-                    const d = diagResp.diagnostics || {};
-                    const lines = [];
-                    if (d.control) lines.push(`control.enabled=${d.control.enabled}, url=${(d.control.broker && d.control.broker.brokerUrl) || 'none'}`);
-                    if (d.llm) lines.push(`llm.enabled=${d.llm.enabled}, url=${(d.llm.broker && d.llm.broker.brokerUrl) || 'none'}`);
-                    lines.push(`bridgePresent=${d.bridgePresent}`);
-                    lines.push(`clientPresent=${d.clientPresent}`);
-                    lines.push(`clientConnected=${d.clientConnected}`);
-                    lines.push(`mqttPrefix=${d.mqttPrefix || 'none'}`);
-                    respDiv.textContent += `\nDiagnostics:\n${lines.join('\n')}`;
-                  });
-                } catch (e) {
-                  respDiv.textContent += `\nDiagnostics request failed: ${e && e.message ? e.message : e}`;
-                }
-                return;
-              }
-              if (!reply) {
-                respDiv.textContent = 'No reply received';
-                return;
-              }
-              // reply expected to be { requestId, origin, payload }
-              try {
-                const rawEl = document.getElementById('chat-raw');
-                if (rawEl) {
-                  try { rawEl.textContent = JSON.stringify(reply, null, 2); /* keep hidden by default */ } catch (e) { rawEl.textContent = String(reply); }
-                }
-
-                // Try to extract a friendly text from the canonical QMS shape: payload.data.reply.text
-                let friendly = null;
-                if (reply && reply.payload && typeof reply.payload === 'object') {
-                  const p = reply.payload;
-                  // If backend returned a tokenId to maintain chat context, persist it
-                  try {
-                    if (p.data && p.data.tokenId) {
-                      storage.set({ chat_context: { tokenId: p.data.tokenId, uuid: (reply.uuid || (reply.callback && reply.callback.uuid) || null) } });
-                    }
-                  } catch (e) {}
-
-                  // Primary: QMS canonical shape
-                  if (p.data && p.data.reply && typeof p.data.reply.text === 'string') {
-                    friendly = p.data.reply.text;
-                  // fallbacks for older/alternate shapes
-                  } else if (p.response && typeof p.response === 'string') friendly = p.response;
-                  else if (p.reply && typeof p.reply === 'object' && (p.reply.text || p.reply.response)) friendly = p.reply.text || p.reply.response;
-                  else if (p.reply && typeof p.reply === 'string') friendly = p.reply;
-                  else if (p.responseText && typeof p.responseText === 'string') friendly = p.responseText;
-                  else if (p.choices && Array.isArray(p.choices) && p.choices[0] && (p.choices[0].text || p.choices[0].message)) friendly = p.choices[0].text || p.choices[0].message;
-                  else if (p.raw && p.raw.text) friendly = p.raw.text;
-                }
-                if (!friendly && reply && reply.payload && typeof reply.payload === 'string') friendly = reply.payload;
-                if (!friendly && reply && reply.response) friendly = reply.response;
-                if (!friendly) {
-                  // Provide a helpful, actionable fallback and surface raw JSON for debugging.
-                  friendly = 'Received a non-text reply from the AI. Click "Show details" to view raw JSON and diagnostics.';
-                  try {
-                    if (rawEl) rawEl.classList.remove('hidden');
-                  } catch (e) {}
-
-                  // render assistant bubble with the short friendly message
-                  renderChatMessage('assistant', friendly);
-
-                  // Render a Show details link that toggles the raw JSON view
-                  try {
-                    // Clear and build interactive response content
-                    respDiv.innerHTML = '';
-                    const textNode = document.createTextNode(friendly + ' ');
-                    respDiv.appendChild(textNode);
-                    const link = document.createElement('a');
-                    link.href = '#';
-                    link.id = 'chat-show-details';
-                    link.textContent = 'Show details';
-                    link.style.marginLeft = '8px';
-                    link.addEventListener('click', (ev) => {
-                      ev.preventDefault();
-                      if (!rawEl) return;
-                      const hidden = rawEl.classList.contains('hidden');
-                      if (hidden) {
-                        rawEl.classList.remove('hidden');
-                        link.textContent = 'Hide details';
-                      } else {
-                        rawEl.classList.add('hidden');
-                        link.textContent = 'Show details';
-                      }
-                    });
-                    respDiv.appendChild(link);
-                  } catch (e) {
-                    // Fall back to plain text if DOM manipulation fails
-                    respDiv.textContent = friendly;
-                  }
-                } else {
-                  // render assistant bubble and friendly text
-                  renderChatMessage('assistant', friendly);
-                  respDiv.textContent = friendly;
-                }
-              } catch (e) { respDiv.textContent = String(reply); }
-            });
-            });
-          } catch (e) { respDiv.textContent = `Chat send error: ${e && e.message ? e.message : e}`; }
-        });
-      }
+      // Chat send handler is initialized from popup-chat.js
+      if (window._wb_initChatSend) window._wb_initChatSend();
 
     $('#sortable').sortable({ update: settings });
     $('#sortable').disableSelection();
