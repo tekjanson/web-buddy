@@ -122,8 +122,24 @@ function handleSingleScriptAction(script) {
     // update central state so other modules see the new list
     try { updateState({ list }); } catch (e) { bgDebug('failed to updateState(list) in single handler', e); }
   } catch (e) { console.warn('Failed to update live script message', e); }
-  icon.setIcon({ path: logo.action });
-  setTimeout(() => { icon.setIcon({ path: logo.record }); }, 1000);
+  // Use a short, visible flash by swapping to the 'stop' icon (deep red)
+  // then revert to the recording icon so the user sees a distinct flash.
+  try {
+    icon.setIcon({ path: logo.stop });
+    setTimeout(() => { try { icon.setIcon({ path: logo.record }); } catch (e) {} }, 400);
+  } catch (e) {}
+  // Also attempt a badge flash as an additional visual cue when available.
+  try {
+    if (host && host.action && typeof host.action.setBadgeBackgroundColor === 'function') {
+      host.action.setBadgeBackgroundColor({ color: '#b91c1c' });
+      host.action.setBadgeText({ text: '\u2022' });
+      setTimeout(() => { try { host.action.setBadgeText({ text: '' }); } catch (e) {} }, 800);
+    } else if (host && host.browserAction && typeof host.browserAction.setBadgeBackgroundColor === 'function') {
+      host.browserAction.setBadgeBackgroundColor({ color: '#b91c1c' });
+      host.browserAction.setBadgeText({ text: '\u2022' });
+      setTimeout(() => { try { host.browserAction.setBadgeText({ text: '' }); } catch (e) {} }, 800);
+    }
+  } catch (e) {}
 }
 
 function handleBatchScriptAction(scripts) {
@@ -144,6 +160,11 @@ function handleBatchScriptAction(scripts) {
       console.warn('Failed to publish actions to MQTT', e);
     }
   }
+  try {
+    // Briefly flash the stop (deep red) icon to indicate a batch of actions arrived
+    icon.setIcon({ path: logo.stop });
+    setTimeout(() => { try { icon.setIcon({ path: logo.record }); } catch (e) {} }, 400);
+  } catch (e) {}
 }
 
 function handleMessage(request, sender, sendResponse) {
@@ -224,8 +245,10 @@ function handleMessage(request, sender, sendResponse) {
         updateState({ recordTab: tabObj, list: [{ type: 'url', path: tabObj.url, time: 0, trigger: 'record', title: tabObj.title }] });
         // Try handshake first, then also send the operation directly as a fallback so
         // the content script will attach listeners even if the handshake race occurs.
-        sendMessageWithHandshake(tabObj, { operation, locators: request.locators });
-        try { sendMessageToTabObj(tabObj, { operation, locators: request.locators }); } catch (e) { bgDebug('direct sendMessageToTabObj failed', e); }
+          // Proactively attempt to inject the content script before sending messages
+          try { ensureContentInjected(tabObj.id); } catch (ie) { bgDebug('ensureContentInjected at record start failed', ie); }
+          sendMessageWithHandshake(tabObj, { operation, locators: request.locators });
+          try { sendMessageToTabObj(tabObj, { operation, locators: request.locators }); } catch (e) { bgDebug('direct sendMessageToTabObj failed', e); }
       } else if (back_tabs) {
         updateState({ recordTab: back_tabs, list: [{ type: 'url', path: back_tabs.url, time: 0, trigger: 'record', title: back_tabs.title }] });
         sendMessageWithHandshake(back_tabs, { operation, locators: request.locators });
@@ -633,6 +656,28 @@ function handleMessage(request, sender, sendResponse) {
     } else {
       bgDebug('Received a Gemini API response for an unknown callId:', request.callId);
     }
+
+  } else if (operation === 'deliver_pending_actions') {
+    // Content script is forwarding locally persisted actions that failed to reach
+    // the background previously. Process them as if they had just arrived.
+    try {
+      const actions = request.actions || [];
+      if (actions && actions.length) {
+        actions.forEach((entry) => {
+          try {
+            if (entry && entry.payload) {
+              // payload may contain 'script' or 'scripts'
+              const p = entry.payload;
+              if (p.script) handleSingleScriptAction(p.script);
+              else if (p.scripts) handleBatchScriptAction(p.scripts);
+            }
+          } catch (e) { bgDebug('failed to process delivered pending action', e); }
+        });
+        try { storage.set({ last_actions: list }); } catch (e) { bgDebug('failed to persist last_actions after delivering pending', e); }
+      }
+    } catch (e) { bgDebug('deliver_pending_actions handler failed', e); }
+    try { sendResponse({ status: 'accepted' }); } catch (e) {}
+    return;
   }
   else if (request.type === 'offscreen-ready') {
     // This is a signal from the offscreen document that it has loaded.

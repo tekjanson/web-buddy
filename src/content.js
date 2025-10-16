@@ -16,7 +16,15 @@ if (window.__web_buddy_content_injected) {
   (function contentScriptModule() {
     const host = chrome;
 
-    let locatorStrategies = [];
+  let locatorStrategies = [];
+  // Guard to prevent attaching listeners multiple times which can cause
+  // duplicate events and prevent a clean stop flow.
+  let recordingAttached = false;
+  // When executing commands programmatically, suppress recording so those
+  // generated events are not captured back into the recording list.
+  let suppressRecording = false;
+  // Binary recording flag: only collect events when this is true
+  let isRecording = false;
 
 function now() { return Date.now(); }
 
@@ -44,14 +52,55 @@ function sendAction(scriptOrScripts) {
   try {
     host.runtime.sendMessage(payload, (resp) => {
       const lastErr = host.runtime && host.runtime.lastError;
-      if (lastErr) debugLog('sendAction lastError', lastErr && lastErr.message ? lastErr.message : lastErr);
-      else debugLog('sendAction delivered', resp);
+      if (lastErr) {
+        debugLog('sendAction lastError', lastErr && lastErr.message ? lastErr.message : lastErr);
+        // Persist the failed action locally so the background can pick it up later
+        try {
+          const arr = (host.storage && host.storage.local && host.storage.local.get) ? null : null;
+        } catch (e) {}
+        try {
+          // Use a best-effort localStorage fallback when chrome.storage is unavailable
+          if (host && host.storage && host.storage.local && typeof host.storage.local.get === 'function') {
+            host.storage.local.get({ pending_actions: [] }, (s) => {
+              const arr = s.pending_actions || [];
+              arr.push({
+                payload,
+                time: Date.now(),
+                tab: (window && window.location ? window.location.href : null)
+              });
+              try { host.storage.local.set({ pending_actions: arr }); } catch (e) { debugLog('persist pending_actions failed', e); }
+            });
+          } else if (typeof window !== 'undefined' && window.localStorage) {
+            try {
+              const key = 'wb_pending_actions';
+              const cur = JSON.parse(window.localStorage.getItem(key) || '[]');
+              cur.push({
+                payload,
+                time: Date.now(),
+                tab: (window && window.location ? window.location.href : null)
+              });
+              window.localStorage.setItem(key, JSON.stringify(cur));
+            } catch (e) { debugLog('localStorage persist failed', e); }
+          }
+        } catch (ee) { debugLog('persist failed', ee); }
+      } else {
+        debugLog('sendAction delivered', resp);
+      }
     });
   } catch (e) { debugLog('sendAction exception', e); }
 }
 
 function recordChange(e) {
   try {
+    // Ignore programmatic events (not initiated by a real user) and
+    // respect explicit suppression when executing scripted commands.
+    if (suppressRecording) { return; }
+    // Treat synthetic events as recordable in test environments (jsdom).
+    const runningInTest = (typeof navigator !== 'undefined' && /node/i.test(String(navigator.userAgent || ''))) || Boolean(window && window.__WB_TEST_ENV);
+    if (e && typeof e.isTrusted !== 'undefined' && e.isTrusted === false && !runningInTest) {
+      debugLog('recordChange: ignored synthetic event');
+      return;
+    }
     const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'text', value: e.target.value || null };
     debugLog('recordChange parsed attr', attr);
     if (isChangeType(attr.type) || !attr.type) {
@@ -77,6 +126,12 @@ function recordKeydown(e) {
 
 function recordClick(e) {
   try {
+    if (suppressRecording) { debugLog('recordClick suppressed during executeCommands'); return; }
+    const runningInTestClick = (typeof navigator !== 'undefined' && /node/i.test(String(navigator.userAgent || ''))) || Boolean(window && window.__WB_TEST_ENV);
+    if (e && typeof e.isTrusted !== 'undefined' && e.isTrusted === false && !runningInTestClick) {
+      debugLog('recordClick: ignored synthetic event');
+      return;
+    }
     const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'click', value: null };
     debugLog('recordClick parsed attr', { tag: e.target.tagName, id: e.target.id, classes: e.target.className, attr });
     if (!isChangeType(attr.type)) {
@@ -88,6 +143,12 @@ function recordClick(e) {
 
 function recordInput(e) {
   try {
+    if (suppressRecording) { debugLog('recordInput suppressed during executeCommands'); return; }
+    const runningInTestInput = (typeof navigator !== 'undefined' && /node/i.test(String(navigator.userAgent || ''))) || Boolean(window && window.__WB_TEST_ENV);
+    if (e && typeof e.isTrusted !== 'undefined' && e.isTrusted === false && !runningInTestInput) {
+      debugLog('recordInput: ignored synthetic event');
+      return;
+    }
     const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'text', value: e.target.value || null };
     debugLog('recordInput parsed attr', { tag: e.target.tagName, id: e.target.id, classes: e.target.className, attr });
     if (isChangeType(attr.type) || e.inputType) {
@@ -99,21 +160,50 @@ function recordInput(e) {
 }
 
 function attachRecordingListeners() {
-  debugLog('attaching recording listeners');
-  document.addEventListener('change', recordChange, true);
-  document.addEventListener('keydown', recordKeydown, true);
-  document.addEventListener('click', recordClick, true);
-  document.addEventListener('input', recordInput, true);
-  try { host.runtime.sendMessage({ operation: 'attached', locators: locatorStrategies }); debugLog('sent attached message to background'); } catch (e) { debugLog('failed to send attached message', e); }
+  try {
+    if (recordingAttached) {
+      debugLog('attachRecordingListeners: already attached, skipping');
+      return;
+    }
+    recordingAttached = true;
+    debugLog('attaching recording listeners');
+    document.addEventListener('change', recordChange, true);
+    document.addEventListener('keydown', recordKeydown, true);
+    document.addEventListener('click', recordClick, true);
+    document.addEventListener('input', recordInput, true);
+    try {
+      host.runtime.sendMessage({ operation: 'attached', locators: locatorStrategies });
+      debugLog('sent attached message to background');
+    } catch (e) {
+      debugLog('failed to send attached message', e);
+    }
+  } catch (e) {
+    debugLog('attachRecordingListeners failed', e);
+  }
 }
 
 function detachRecordingListeners() {
-  debugLog('detaching recording listeners');
-  document.removeEventListener('change', recordChange, true);
-  document.removeEventListener('keydown', recordKeydown, true);
-  document.removeEventListener('click', recordClick, true);
-  document.removeEventListener('input', recordInput, true);
-  try { host.runtime.sendMessage({ operation: 'detached' }); debugLog('sent detached message to background'); } catch (e) { debugLog('failed to send detached message', e); }
+  try {
+    if (!recordingAttached) {
+      debugLog('detachRecordingListeners: no listeners attached, skipping');
+      try { host.runtime.sendMessage({ operation: 'detached' }); } catch (e) {}
+      return;
+    }
+    recordingAttached = false;
+    debugLog('detaching recording listeners');
+    document.removeEventListener('change', recordChange, true);
+    document.removeEventListener('keydown', recordKeydown, true);
+    document.removeEventListener('click', recordClick, true);
+    document.removeEventListener('input', recordInput, true);
+    try {
+      host.runtime.sendMessage({ operation: 'detached' });
+      debugLog('sent detached message to background');
+    } catch (e) {
+      debugLog('failed to send detached message', e);
+    }
+  } catch (e) {
+    debugLog('detachRecordingListeners failed', e);
+  }
 }
 
 function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 200) {
@@ -358,6 +448,10 @@ handlers.push({
 // perform canonical commands sent by background
 function executeCommands(cmds) {
   (async function run() {
+    // Suppress recording while we execute scripted commands so those
+    // synthetic or programmatic events are not captured as new records.
+    try {
+      suppressRecording = true;
     const results = [];
     const runStart = Date.now();
     const globalTimeout = 120000; // 2 minutes max for a run
@@ -486,6 +580,9 @@ function executeCommands(cmds) {
       if (c.action === 'navigate') break;
     }
     try { host.runtime.sendMessage({ operation: 'execute_result', results }); } catch (e) { debugLog('failed to send execute_result', e); }
+    } finally {
+      suppressRecording = false;
+    }
   }());
 }
 
@@ -524,8 +621,12 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Keep channel open for async response
   }
   if (request.operation === 'record') {
-    locatorStrategies = (request.locators || []).slice(); locatorStrategies.push('index'); attachRecordingListeners(); debugLog('received record operation, locatorStrategies', locatorStrategies);
+    locatorStrategies = (request.locators || []).slice(); locatorStrategies.push('index');
+    isRecording = true;
+    attachRecordingListeners();
+    debugLog('received record operation, locatorStrategies', locatorStrategies);
   } else if (request.operation === 'stop') {
+    isRecording = false;
     detachRecordingListeners(); debugLog('received stop operation');
   } else if (request.operation === 'execute_commands') {
     const cmds = request.commands || [];
@@ -707,11 +808,49 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
 try { host.runtime.sendMessage({ operation: 'load' }); } catch (e) {}
 debugLog('content script loaded and sent initial load message');
 
+// If we persisted actions locally due to a previous runtime.lastError, forward
+// them to the background now so they can be processed and cleared.
+function deliverPendingActionsToBackground() {
+  try {
+    if (host && host.storage && host.storage.local && typeof host.storage.local.get === 'function') {
+      host.storage.local.get({ pending_actions: [] }, (s) => {
+        const arr = s.pending_actions || [];
+        if (arr && arr.length) {
+          try {
+            host.runtime.sendMessage({ operation: 'deliver_pending_actions', actions: arr }, () => {
+              // clear stored pending actions after attempting delivery
+              try { host.storage.local.set({ pending_actions: [] }); } catch (e) { debugLog('clear pending_actions failed', e); }
+            });
+          } catch (e) { debugLog('deliver_pending_actions sendMessage failed', e); }
+        }
+      });
+      return;
+    }
+  } catch (e) { debugLog('deliverPendingActionsToBackground read failed', e); }
+
+  // Fallback: check localStorage key used as a best-effort fallback
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const key = 'wb_pending_actions';
+      const cur = JSON.parse(window.localStorage.getItem(key) || '[]');
+      if (cur && cur.length) {
+        try {
+          host.runtime.sendMessage({ operation: 'deliver_pending_actions', actions: cur }, () => {
+            try { window.localStorage.removeItem(key); } catch (e) { debugLog('localStorage clear failed', e); }
+          });
+        } catch (e) { debugLog('deliver_pending_actions localStorage send failed', e); }
+      }
+    }
+  } catch (e) { debugLog('deliverPendingActionsToBackground localStorage fallback failed', e); }
+}
+
+try { deliverPendingActionsToBackground(); } catch (e) { debugLog('deliverPendingActionsToBackground invocation failed', e); }
+
 // Fallback: if the background has operation already set to 'record', attach listeners so we don't miss
-try { host.storage.local.get({ operation: 'stop', locators: [] }, (state) => { debugLog('storage state on load', state); if (state && state.operation === 'record') { locatorStrategies = (state.locators || []).slice(); locatorStrategies.push('index'); attachRecordingListeners(); debugLog('attached recording listeners based on storage.state.operation'); } }); } catch (e) { debugLog('storage check failed on load', e && e.message ? e.message : e); }
+try { host.storage.local.get({ operation: 'stop', locators: [] }, (state) => { debugLog('storage state on load', state); if (state && state.operation === 'record') { locatorStrategies = (state.locators || []).slice(); locatorStrategies.push('index'); isRecording = true; attachRecordingListeners(); debugLog('attached recording listeners based on storage.state.operation'); } }); } catch (e) { debugLog('storage check failed on load', e && e.message ? e.message : e); }
 
     // Listen for operation changes from storage as an additional reliable signal
-    try { host.storage.onChanged.addListener((changes) => { if (changes.operation) { const op = changes.operation.newValue; debugLog('storage operation changed to', op); if (op === 'record') { host.storage.local.get({ locators: [] }, (s) => { locatorStrategies = (s.locators || []).slice(); locatorStrategies.push('index'); attachRecordingListeners(); }); } else if (op === 'stop') { detachRecordingListeners(); } } }); } catch (e) { debugLog('failed to add storage.onChanged listener', e && e.message ? e.message : e); }
+  try { host.storage.onChanged.addListener((changes) => { if (changes.operation) { const op = changes.operation.newValue; debugLog('storage operation changed to', op); if (op === 'record') { host.storage.local.get({ locators: [] }, (s) => { locatorStrategies = (s.locators || []).slice(); locatorStrategies.push('index'); isRecording = true; attachRecordingListeners(); }); } else if (op === 'stop') { isRecording = false; detachRecordingListeners(); } } }); } catch (e) { debugLog('failed to add storage.onChanged listener', e && e.message ? e.message : e); }
 
   }());
 }

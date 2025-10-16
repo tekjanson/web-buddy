@@ -127,79 +127,91 @@ function sendMessageWithHandshake(tabObj, message, timeout = 300) {
     return;
   }
 
+  // Attempt handshake a few times with small backoff. If all attempts fail,
+  // persist the message to pending_messages so the content script can pick it up
+  // later or an operator can inspect it.
   let replied = false;
   let persisted = false;
-  bgDebug('sendMessageWithHandshake start', tabObj.id, message);
-  try {
-    host.tabs.sendMessage(tabObj.id, { type: 'handshake' }, (resp) => {
-      const lastErr = host.runtime && host.runtime.lastError;
-      if (lastErr) {
-        const msg = lastErr && lastErr.message ? lastErr.message : String(lastErr);
-        const benignRe = /Receiving end does not exist|Could not establish connection|The message port closed before a response/;
-        if (benignRe.test(msg)) {
-          bgDebug('handshake benign', msg, 'for tab', tabObj.id);
-          storage.get({ pending_messages: [] }, (s) => {
-            const arr = s.pending_messages || [];
-            arr.push({
-              tabId: tabObj.id,
-              message,
-              time: Date.now(),
-              error: msg,
-              handshake: false,
-              benign: true
+  const maxAttempts = 3;
+  const baseDelay = 120; // ms
+  let attempt = 0;
+
+  function tryOnce() {
+    attempt += 1;
+    bgDebug('sendMessageWithHandshake attempt', attempt, 'for tab', tabObj.id);
+    try {
+      // Ensure content script is injected before attempting handshake
+      try { injectContentScript(tabObj.id); } catch (ie) { bgDebug('injectContentScript pre-handshake failed', ie); }
+
+      host.tabs.sendMessage(tabObj.id, { type: 'handshake' }, (resp) => {
+        const lastErr = host.runtime && host.runtime.lastError;
+        if (lastErr) {
+          const msg = lastErr && lastErr.message ? lastErr.message : String(lastErr);
+          bgDebug('handshake attempt error', msg, 'attempt', attempt);
+          if (attempt >= maxAttempts) {
+            const benignRe = /Receiving end does not exist|Could not establish connection|The message port closed before a response/;
+            storage.get({ pending_messages: [] }, (s) => {
+              const arr = s.pending_messages || [];
+              arr.push({
+                tabId: tabObj.id,
+                message,
+                time: Date.now(),
+                error: msg,
+                handshake: false,
+                benign: benignRe.test(msg)
+              });
+              storage.set({ pending_messages: arr });
+              persisted = true;
             });
-            storage.set({ pending_messages: arr });
-            persisted = true;
-          });
+          } else {
+            // schedule next attempt with backoff
+            setTimeout(tryOnce, baseDelay * attempt);
+          }
+        } else if (resp && resp.pong) {
+          replied = true;
+          sendMessageToTabObj(tabObj, message);
         } else {
-          console.warn('handshake failed:', msg, 'for tab', tabObj.id);
-          bgDebug('handshake unexpected error', msg, 'for tab', tabObj.id);
-          storage.get({ pending_messages: [] }, (s) => {
-            const arr = s.pending_messages || [];
-            arr.push({
-              tabId: tabObj.id,
-              message,
-              time: Date.now(),
-              error: msg,
-              handshake: false
+          // no error but also no pong; treat as a possible transient case
+          if (attempt >= maxAttempts) {
+            storage.get({ pending_messages: [] }, (s) => {
+              const arr = s.pending_messages || [];
+              arr.push({ tabId: tabObj.id, message, time: Date.now(), handshake: false });
+              storage.set({ pending_messages: arr });
+              persisted = true;
             });
-            storage.set({ pending_messages: arr });
-            persisted = true;
-          });
+          } else {
+            setTimeout(tryOnce, baseDelay * attempt);
+          }
         }
-      } else if (resp && resp.pong) {
-        replied = true;
-        sendMessageToTabObj(tabObj, message);
-      } else {
-        console.info('handshake no pong response, storing pending for tab', tabObj.id);
+      });
+    } catch (e) {
+      bgDebug('sendMessageWithHandshake tryOnce exception', e, 'attempt', attempt);
+      if (attempt >= maxAttempts) {
         storage.get({ pending_messages: [] }, (s) => {
           const arr = s.pending_messages || [];
-          arr.push({ tabId: tabObj.id, message, time: Date.now(), handshake: false });
+          arr.push({ tabId: tabObj.id, message, time: Date.now(), error: String(e) });
           storage.set({ pending_messages: arr });
           persisted = true;
         });
+      } else {
+        setTimeout(tryOnce, baseDelay * attempt);
       }
-    });
-  } catch (e) {
-    console.warn('sendMessageWithHandshake exception', e);
-    storage.get({ pending_messages: [] }, (s) => {
-      const arr = s.pending_messages || [];
-      arr.push({ tabId: tabObj.id, message, time: Date.now(), error: String(e) });
-      storage.set({ pending_messages: arr });
-      persisted = true;
-    });
+    }
   }
 
+  tryOnce();
+
+  // Overall timeout: ensure we persist if nothing succeeded within the timeout window
   setTimeout(() => {
     if (!replied && !persisted) {
-      console.warn('handshake timeout, persisting message for tab', tabObj.id);
+      bgDebug('handshake overall timeout, persisting message for tab', tabObj.id);
       storage.get({ pending_messages: [] }, (s) => {
         const arr = s.pending_messages || [];
         arr.push({ tabId: tabObj.id, message, time: Date.now(), handshake: 'timeout' });
         storage.set({ pending_messages: arr });
       });
     }
-  }, timeout);
+  }, timeout + (baseDelay * maxAttempts * 2));
 }
 
 function getTranslator() {
