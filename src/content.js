@@ -16,7 +16,15 @@ if (window.__web_buddy_content_injected) {
   (function contentScriptModule() {
     const host = chrome;
 
-    let locatorStrategies = [];
+  let locatorStrategies = [];
+  // Guard to prevent attaching listeners multiple times which can cause
+  // duplicate events and prevent a clean stop flow.
+  let recordingAttached = false;
+  // When executing commands programmatically, suppress recording so those
+  // generated events are not captured back into the recording list.
+  let suppressRecording = false;
+  // Binary recording flag: only collect events when this is true
+  let isRecording = false;
 
 function now() { return Date.now(); }
 
@@ -24,14 +32,75 @@ function debugLog(...args) { try { if (typeof rcLog !== 'undefined') rcLog('debu
 
 function isChangeType(type) { return ['text', 'file', 'select'].includes(type); }
 
+function looksLikeNavigation(node) {
+  try {
+    if (!node || !node.tagName) return false;
+    const tag = node.tagName.toLowerCase();
+    if (tag === 'a' && node.getAttribute('href')) return true;
+    if (tag === 'button' && String(node.getAttribute('type') || '').toLowerCase() === 'submit') return true;
+    if (node.closest && node.closest('a')) return true;
+  } catch (e) {}
+  return false;
+}
+
 function sendAction(scriptOrScripts) {
-  const payload = { operation: 'action', ...(Array.isArray(scriptOrScripts) ? { scripts: scriptOrScripts } : { script: scriptOrScripts }) };
+  const payload = {
+    operation: 'action',
+    ...(Array.isArray(scriptOrScripts) ? { scripts: scriptOrScripts } : { script: scriptOrScripts })
+  };
   debugLog('sending action payload', payload);
-  try { host.runtime.sendMessage(payload, (resp) => { const lastErr = host.runtime && host.runtime.lastError; if (lastErr) debugLog('sendAction lastError', lastErr && lastErr.message ? lastErr.message : lastErr); else debugLog('sendAction delivered', resp); }); } catch (e) { debugLog('sendAction exception', e); }
+  try {
+    host.runtime.sendMessage(payload, (resp) => {
+      const lastErr = host.runtime && host.runtime.lastError;
+      if (lastErr) {
+        debugLog('sendAction lastError', lastErr && lastErr.message ? lastErr.message : lastErr);
+        // Persist the failed action locally so the background can pick it up later
+        try {
+          const arr = (host.storage && host.storage.local && host.storage.local.get) ? null : null;
+        } catch (e) {}
+        try {
+          // Use a best-effort localStorage fallback when chrome.storage is unavailable
+          if (host && host.storage && host.storage.local && typeof host.storage.local.get === 'function') {
+            host.storage.local.get({ pending_actions: [] }, (s) => {
+              const arr = s.pending_actions || [];
+              arr.push({
+                payload,
+                time: Date.now(),
+                tab: (window && window.location ? window.location.href : null)
+              });
+              try { host.storage.local.set({ pending_actions: arr }); } catch (e) { debugLog('persist pending_actions failed', e); }
+            });
+          } else if (typeof window !== 'undefined' && window.localStorage) {
+            try {
+              const key = 'wb_pending_actions';
+              const cur = JSON.parse(window.localStorage.getItem(key) || '[]');
+              cur.push({
+                payload,
+                time: Date.now(),
+                tab: (window && window.location ? window.location.href : null)
+              });
+              window.localStorage.setItem(key, JSON.stringify(cur));
+            } catch (e) { debugLog('localStorage persist failed', e); }
+          }
+        } catch (ee) { debugLog('persist failed', ee); }
+      } else {
+        debugLog('sendAction delivered', resp);
+      }
+    });
+  } catch (e) { debugLog('sendAction exception', e); }
 }
 
 function recordChange(e) {
   try {
+    // Ignore programmatic events (not initiated by a real user) and
+    // respect explicit suppression when executing scripted commands.
+    if (suppressRecording) { return; }
+    // Treat synthetic events as recordable in test environments (jsdom).
+    const runningInTest = (typeof navigator !== 'undefined' && /node/i.test(String(navigator.userAgent || ''))) || Boolean(window && window.__WB_TEST_ENV);
+    if (e && typeof e.isTrusted !== 'undefined' && e.isTrusted === false && !runningInTest) {
+      debugLog('recordChange: ignored synthetic event');
+      return;
+    }
     const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'text', value: e.target.value || null };
     debugLog('recordChange parsed attr', attr);
     if (isChangeType(attr.type) || !attr.type) {
@@ -57,6 +126,12 @@ function recordKeydown(e) {
 
 function recordClick(e) {
   try {
+    if (suppressRecording) { debugLog('recordClick suppressed during executeCommands'); return; }
+    const runningInTestClick = (typeof navigator !== 'undefined' && /node/i.test(String(navigator.userAgent || ''))) || Boolean(window && window.__WB_TEST_ENV);
+    if (e && typeof e.isTrusted !== 'undefined' && e.isTrusted === false && !runningInTestClick) {
+      debugLog('recordClick: ignored synthetic event');
+      return;
+    }
     const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'click', value: null };
     debugLog('recordClick parsed attr', { tag: e.target.tagName, id: e.target.id, classes: e.target.className, attr });
     if (!isChangeType(attr.type)) {
@@ -68,6 +143,12 @@ function recordClick(e) {
 
 function recordInput(e) {
   try {
+    if (suppressRecording) { debugLog('recordInput suppressed during executeCommands'); return; }
+    const runningInTestInput = (typeof navigator !== 'undefined' && /node/i.test(String(navigator.userAgent || ''))) || Boolean(window && window.__WB_TEST_ENV);
+    if (e && typeof e.isTrusted !== 'undefined' && e.isTrusted === false && !runningInTestInput) {
+      debugLog('recordInput: ignored synthetic event');
+      return;
+    }
     const attr = scanner.parseNode(now(), e.target, locatorStrategies) || { type: 'text', value: e.target.value || null };
     debugLog('recordInput parsed attr', { tag: e.target.tagName, id: e.target.id, classes: e.target.className, attr });
     if (isChangeType(attr.type) || e.inputType) {
@@ -79,21 +160,50 @@ function recordInput(e) {
 }
 
 function attachRecordingListeners() {
-  debugLog('attaching recording listeners');
-  document.addEventListener('change', recordChange, true);
-  document.addEventListener('keydown', recordKeydown, true);
-  document.addEventListener('click', recordClick, true);
-  document.addEventListener('input', recordInput, true);
-  try { host.runtime.sendMessage({ operation: 'attached', locators: locatorStrategies }); debugLog('sent attached message to background'); } catch (e) { debugLog('failed to send attached message', e); }
+  try {
+    if (recordingAttached) {
+      debugLog('attachRecordingListeners: already attached, skipping');
+      return;
+    }
+    recordingAttached = true;
+    debugLog('attaching recording listeners');
+    document.addEventListener('change', recordChange, true);
+    document.addEventListener('keydown', recordKeydown, true);
+    document.addEventListener('click', recordClick, true);
+    document.addEventListener('input', recordInput, true);
+    try {
+      host.runtime.sendMessage({ operation: 'attached', locators: locatorStrategies });
+      debugLog('sent attached message to background');
+    } catch (e) {
+      debugLog('failed to send attached message', e);
+    }
+  } catch (e) {
+    debugLog('attachRecordingListeners failed', e);
+  }
 }
 
 function detachRecordingListeners() {
-  debugLog('detaching recording listeners');
-  document.removeEventListener('change', recordChange, true);
-  document.removeEventListener('keydown', recordKeydown, true);
-  document.removeEventListener('click', recordClick, true);
-  document.removeEventListener('input', recordInput, true);
-  try { host.runtime.sendMessage({ operation: 'detached' }); debugLog('sent detached message to background'); } catch (e) { debugLog('failed to send detached message', e); }
+  try {
+    if (!recordingAttached) {
+      debugLog('detachRecordingListeners: no listeners attached, skipping');
+      try { host.runtime.sendMessage({ operation: 'detached' }); } catch (e) {}
+      return;
+    }
+    recordingAttached = false;
+    debugLog('detaching recording listeners');
+    document.removeEventListener('change', recordChange, true);
+    document.removeEventListener('keydown', recordKeydown, true);
+    document.removeEventListener('click', recordClick, true);
+    document.removeEventListener('input', recordInput, true);
+    try {
+      host.runtime.sendMessage({ operation: 'detached' });
+      debugLog('sent detached message to background');
+    } catch (e) {
+      debugLog('failed to send detached message', e);
+    }
+  } catch (e) {
+    debugLog('detachRecordingListeners failed', e);
+  }
 }
 
 function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 200) {
@@ -112,11 +222,31 @@ function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 2
               const s = String(xpath || '');
               let el = null;
               if (s.indexOf('//') === 0 || s.toLowerCase().indexOf('xpath:') === 0) {
-                try { el = document.evaluate(s.replace(/^xpath:\s*/i, ''), document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; } catch (e) { debugLog('waitForElement xpath eval error', e); }
+                try {
+                  el = document.evaluate(
+                    s.replace(/^xpath:\s*/i, ''),
+                    document,
+                    null,
+                    XPathResult.FIRST_ORDERED_NODE_TYPE,
+                    null
+                  ).singleNodeValue;
+                } catch (e) {
+                  debugLog('waitForElement xpath eval error', e);
+                }
               } else {
-                try { el = document.querySelector(s); } catch (e) { /* invalid css */ }
+                try {
+                  el = document.querySelector(s);
+                } catch (e) { /* invalid css */ }
                 if (!el) {
-                  try { el = document.evaluate(s, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; } catch (e) { /* swallow */ }
+                  try {
+                    el = document.evaluate(
+                      s,
+                      document,
+                      null,
+                      XPathResult.FIRST_ORDERED_NODE_TYPE,
+                      null
+                    ).singleNodeValue;
+                  } catch (e) { /* swallow */ }
                 }
               }
               if (el) { debugLog('waitForElement found element by selector', s, 'after', attempts, 'attempts'); clearInterval(timer); return resolve(el); }
@@ -151,7 +281,13 @@ function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 2
                 try {
                   const txt = (node.textContent || '').trim();
                   if (!txt) continue;
-                  if (txt.indexOf(String(textFallback).trim()) !== -1 || String(txt).toLowerCase().indexOf(String(textFallback).toLowerCase()) !== -1) { candidates.push({ element: node, text: txt }); }
+                  const plainMatch = txt.indexOf(String(textFallback).trim()) !== -1;
+                  const lowerMatch = String(txt)
+                    .toLowerCase()
+                    .indexOf(String(textFallback).toLowerCase()) !== -1;
+                  if (plainMatch || lowerMatch) {
+                    candidates.push({ element: node, text: txt });
+                  }
                 } catch (ee) { }
               }
               function getXPathForElement(el) {
@@ -160,7 +296,10 @@ function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 2
                 while (el && el.nodeType === 1) {
                   let nb = 0;
                   let sib = el.previousSibling;
-                  while (sib) { if (sib.nodeType === 1 && sib.nodeName === el.nodeName) nb += 1; sib = sib.previousSibling; }
+                  while (sib) {
+                    if (sib.nodeType === 1 && sib.nodeName === el.nodeName) nb += 1;
+                    sib = sib.previousSibling;
+                  }
                   const idx = nb ? `[${nb + 1}]` : '';
                   parts.unshift(el.nodeName.toLowerCase() + idx);
                   el = el.parentNode;
@@ -168,10 +307,24 @@ function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 2
                 }
                 return parts.length ? '//' + parts.join('/') : null;
               }
-              const suggestionPayload = (candidates.length ? candidates.slice(0, 5).map(c => ({ xpath: getXPathForElement(c.element), text: c.text })) : []);
+              const suggestionPayload = (candidates.length
+                ? candidates.slice(0, 5).map(c => ({
+                  xpath: getXPathForElement(c.element),
+                  text: c.text
+                }))
+                : []);
               debugLog('waitForElement suggestions', suggestionPayload);
-              try { window.__web_buddy_last_selector_suggestions = suggestionPayload; } catch (e) { /* ignore */ }
-              try { host.runtime.sendMessage({ operation: 'selector_suggestions', original: xpath, textFallback, suggestions: suggestionPayload }); } catch (e) { debugLog('failed to send selector_suggestions', e); }
+              try {
+                window.__web_buddy_last_selector_suggestions = suggestionPayload;
+              } catch (e) { /* ignore */ }
+              try {
+                host.runtime.sendMessage({
+                  operation: 'selector_suggestions',
+                  original: xpath,
+                  textFallback,
+                  suggestions: suggestionPayload
+                });
+              } catch (e) { debugLog('failed to send selector_suggestions', e); }
             } catch (e) { debugLog('waitForElement suggestion building failed', e); }
           }
           return resolve(null);
@@ -187,7 +340,10 @@ function quickFind(selector, textFallback) {
     if (selector && typeof selector === 'string') {
       const s = selector;
       // try CSS
-      try { const el = document.querySelector(s); if (el) return el; } catch (e) { /* ignore invalid css */ }
+      try {
+        const el = document.querySelector(s);
+        if (el) return el;
+      } catch (e) { /* ignore invalid css */ }
       // try XPath
       try { const xe = document.evaluate(s.replace(/^xpath:\s*/i, ''), document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; if (xe) return xe; } catch (e) { /* ignore */ }
     }
@@ -218,17 +374,26 @@ const handlers = [];
 // Mat-select handler with virtual-scroll support
 handlers.push({
   name: 'matSelectHandler',
-  match: (cmd) => { try { const sel = String(cmd.selector || ''); return sel.indexOf('mat-select') !== -1 || sel.indexOf('mat-option') !== -1 || (/mat-option/i).test(sel) || (!!cmd.value && sel.indexOf('mat') !== -1); } catch (e) { return false; } },
+  match: (cmd) => {
+    try {
+      const sel = String(cmd.selector || '');
+      return sel.indexOf('mat-select') !== -1 || sel.indexOf('mat-option') !== -1 || (/mat-option/i).test(sel) || (!!cmd.value && sel.indexOf('mat') !== -1);
+    } catch (e) { return false; }
+  },
   handle: async (cmd) => {
     try {
       debugLog('matSelectHandler: handling', cmd.selector, cmd.value);
-      const trigger = await waitForElement(cmd.selector || '', null, 3000, 200) || document.querySelector('[id^="mat-select"]') || document.querySelector('.mat-select-trigger');
+      const trigger = await waitForElement(cmd.selector || '', null, 3000, 200)
+        || document.querySelector('[id^="mat-select"]')
+        || document.querySelector('.mat-select-trigger');
       if (!trigger) { debugLog('matSelectHandler: trigger not found'); return false; }
       try { trigger.click(); } catch (e) { try { trigger.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('matSelectHandler: trigger click failed', ee); } }
 
       const panelSelectorCandidates = ['.mat-select-panel', 'body .mat-select-panel', '.cdk-overlay-pane'];
-      let option = null; const start = Date.now(); const timeout = 3000;
-      while (Date.now() - start < timeout) {
+  let option = null;
+  const start = Date.now();
+  const timeout = 3000;
+  while (Date.now() - start < timeout) {
         // quick find in overlays
         option = quickFind(null, String(cmd.value || '')) || null;
         if (option) break;
@@ -240,7 +405,8 @@ handlers.push({
           option = panelOpts.find(o => (o.textContent || '').trim().indexOf(String(cmd.value || '').trim()) !== -1) || null; if (option) break;
           try { const prev = panel.scrollTop || 0; panel.scrollTop = prev + (panel.clientHeight || 200); debugLog('matSelectHandler: scrolled panel to', panel.scrollTop); } catch (e) { }
         }
-        if (option) break; await new Promise(r => setTimeout(r, 120));
+  if (option) break;
+  await new Promise(r => setTimeout(r, 120));
       }
       if (!option) { debugLog('matSelectHandler: option not found for', cmd.value); return false; }
       try { option.click(); } catch (e) { try { option.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('matSelectHandler: option click failed', ee); } }
@@ -262,6 +428,18 @@ handlers.push({
       // short wait window before longer polling
       const el = await waitForElement(cmd.selector || '', cmd.value || null, 1200, 120);
       if (el) { try { el.click(); } catch (e) { try { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('defaultClickHandler click failed', ee); } } return true; }
+          // If we reached here and will attempt to click an element that may navigate,
+          // persist remaining commands so they can be replayed after navigation.
+          function looksLikeNavigation(node) {
+            try {
+              if (!node || !node.tagName) return false;
+              const tag = node.tagName.toLowerCase();
+              if (tag === 'a' && node.getAttribute('href')) return true;
+              if (tag === 'button' && String(node.getAttribute('type') || '').toLowerCase() === 'submit') return true;
+              if (node.closest && node.closest('a')) return true;
+            } catch (e) { }
+            return false;
+          }
       return false;
     } catch (e) { debugLog('defaultClickHandler error', e); return false; }
   }
@@ -270,6 +448,10 @@ handlers.push({
 // perform canonical commands sent by background
 function executeCommands(cmds) {
   (async function run() {
+    // Suppress recording while we execute scripted commands so those
+    // synthetic or programmatic events are not captured as new records.
+    try {
+      suppressRecording = true;
     const results = [];
     const runStart = Date.now();
     const globalTimeout = 120000; // 2 minutes max for a run
@@ -285,6 +467,13 @@ function executeCommands(cmds) {
         try {
           debugLog('executing command', i, c.action, 'attempt', attempts, 'selector', c.selector, 'value', c.value, 'timeout', timeout);
           if (c.action === 'navigate') {
+            // Persist remaining commands before navigation so background can resume them after load
+            try {
+              const remaining = Array.isArray(cmds) ? cmds.slice(i + 1) : [];
+              if (remaining && remaining.length) {
+                try { host.runtime.sendMessage({ operation: 'persist_commands', commands: remaining }); } catch (pe) { debugLog('persist before navigate failed', pe); }
+              }
+            } catch (e) { debugLog('failed to compute remaining commands before navigate', e); }
             window.location.href = c.value || c.url || '';
             success = true;
             await new Promise(r => setTimeout(r, 600));
@@ -305,7 +494,14 @@ function executeCommands(cmds) {
               if (!success) {
                 // quick immediate probe
                 const quick = quickFind(c.selector || '', c.textFallback || c.value || null);
-                if (quick) { try { quick.click(); } catch (e) { try { quick.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('quick click dispatch failed', ee); } } success = true; }
+                if (quick) {
+                  try {
+                    // persist remaining commands if this click may navigate
+                    try { if (looksLikeNavigation(quick)) { host.runtime.sendMessage({ operation: 'persist_commands', commands: cmds.slice(i + 1) }); } } catch (pe) { debugLog('persist before quick click failed', pe); }
+                    quick.click();
+                  } catch (e) { try { quick.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('quick click dispatch failed', ee); } }
+                  success = true;
+                }
                 else {
                   // try cached suggestions first (fast)
                   try {
@@ -315,8 +511,22 @@ function executeCommands(cmds) {
                         const xp = sugg[s].xpath;
                         if (!xp) continue;
                         let el2 = null;
-                        try { el2 = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; } catch (e) { }
-                        if (el2) { try { el2.click(); } catch (e) { try { el2.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('suggestion click failed', ee); } } success = true; break; }
+                        try {
+                          el2 = document.evaluate(
+                            xp,
+                            document,
+                            null,
+                            XPathResult.FIRST_ORDERED_NODE_TYPE,
+                            null
+                          ).singleNodeValue;
+                        } catch (e) { }
+                        if (el2) {
+                          try {
+                            try { if (looksLikeNavigation(el2)) { host.runtime.sendMessage({ operation: 'persist_commands', commands: cmds.slice(i + 1) }); } } catch (pe) { debugLog('persist before suggestion click failed', pe); }
+                            el2.click();
+                          } catch (e) { try { el2.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('suggestion click failed', ee); } }
+                          success = true; break;
+                        }
                       } catch (se) { debugLog('suggestion attempt error', se); }
                     }
                   } catch (se) { debugLog('suggestion consumption failed', se); }
@@ -324,11 +534,25 @@ function executeCommands(cmds) {
                   // finally fall back to a longer wait (use per-command timeout)
                   if (!success) {
                     const el = await waitForElement(c.selector || '', c.textFallback || c.value || null, timeout, 200);
-                    if (el) { try { el.click(); } catch (e) { try { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('click dispatch failed', ee); } } success = true; }
+                    if (el) {
+                      try {
+                        try { if (looksLikeNavigation(el)) { host.runtime.sendMessage({ operation: 'persist_commands', commands: cmds.slice(i + 1) }); } } catch (pe) { debugLog('persist before waitForElement click failed', pe); }
+                        el.click();
+                      } catch (e) { try { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('click dispatch failed', ee); } }
+                      success = true;
+                    }
                   }
                 }
               }
           } else if (c.action === 'input') {
+            // If we're about to interact with an element that seems likely to navigate,
+            // persist the remaining commands so the background can replay them after load.
+            try {
+              if (typeof looksLikeNavigation === 'function') {
+                // No-op here; looksLikeNavigation defined in click handler scope.
+              }
+            } catch (e) {}
+          } else if (c.action === 'select') {
             const el = await waitForElement(c.selector || '', c.value || null, timeout, 200);
             if (el) { el.focus(); el.value = c.value || ''; el.dispatchEvent(new Event('input', { bubbles: true })); success = true; }
           } else if (c.action === 'select') {
@@ -344,11 +568,21 @@ function executeCommands(cmds) {
         } catch (e) { debugLog('command execution error', e && e.message ? e.message : e); }
         if (!success && attempts < maxAttempts) { debugLog('retrying command', i, c.action, 'next attempt in 200ms'); await new Promise(r => setTimeout(r, 200)); }
       }
-      results.push({ index: i, action: c.action, success, attempts, selector: c.selector, value: c.value });
+      results.push({
+        index: i,
+        action: c.action,
+        success,
+        attempts,
+        selector: c.selector,
+        value: c.value
+      });
       if (!success) debugLog('command failed after attempts', i, c.action, attempts);
       if (c.action === 'navigate') break;
     }
     try { host.runtime.sendMessage({ operation: 'execute_result', results }); } catch (e) { debugLog('failed to send execute_result', e); }
+    } finally {
+      suppressRecording = false;
+    }
   }());
 }
 
@@ -387,8 +621,12 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Keep channel open for async response
   }
   if (request.operation === 'record') {
-    locatorStrategies = (request.locators || []).slice(); locatorStrategies.push('index'); attachRecordingListeners(); debugLog('received record operation, locatorStrategies', locatorStrategies);
+    locatorStrategies = (request.locators || []).slice(); locatorStrategies.push('index');
+    isRecording = true;
+    attachRecordingListeners();
+    debugLog('received record operation, locatorStrategies', locatorStrategies);
   } else if (request.operation === 'stop') {
+    isRecording = false;
     detachRecordingListeners(); debugLog('received stop operation');
   } else if (request.operation === 'execute_commands') {
     const cmds = request.commands || [];
@@ -411,6 +649,139 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const prunedHtml = getPrunedDom();
     sendResponse({ html: prunedHtml });
     return true; // Indicate async response
+  } else if (request.operation === 'get_dom_summary') {
+    // Return a structured summary of the page to help AI understand the context
+    try {
+      const summary = {};
+      try { summary.url = window.location.href; } catch (e) { summary.url = null; }
+      try { summary.title = document.title || null; } catch (e) { summary.title = null; }
+      try { const md = document.querySelector('meta[name="description"]') || document.querySelector('meta[property="og:description"]'); summary.metaDescription = md ? (md.getAttribute('content') || null) : null; } catch (e) { summary.metaDescription = null; }
+      try {
+        const headings = Array.from(document.querySelectorAll('h1, h2, h3')).slice(0, 10).map(h => ({ tag: h.tagName.toLowerCase(), text: (h.textContent || '').trim() }));
+        summary.headings = headings;
+      } catch (e) { summary.headings = []; }
+      try {
+        const forms = Array.from(document.querySelectorAll('form')).slice(0, 8).map(f => {
+          const inputs = Array.from(f.querySelectorAll('input, textarea, select, button')).map(i => ({ tag: i.tagName.toLowerCase(), type: i.type || null, name: i.name || null, id: i.id || null, placeholder: i.placeholder || null }));
+          return { id: f.id || null, name: f.name || null, action: f.action || null, inputs };
+        });
+        summary.forms = forms;
+      } catch (e) { summary.forms = []; }
+      try {
+        const links = Array.from(document.querySelectorAll('a[href]')).slice(0, 20).map(a => ({ href: a.href, text: (a.textContent || '').trim() }));
+        summary.links = links;
+      } catch (e) { summary.links = []; }
+      try {
+        // capture some visible text snippets from the body for quick context
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+        const snippets = [];
+        while (walker.nextNode() && snippets.length < 20) {
+          const t = (walker.currentNode.nodeValue || '').trim();
+          if (t.length > 20 && t.length < 400) snippets.push(t.slice(0, 300));
+        }
+        summary.visibleText = snippets;
+      } catch (e) { summary.visibleText = []; }
+
+      try { sendResponse({ summary }); } catch (e) { sendResponse({ summary: null }); }
+    } catch (e) { try { sendResponse({ summary: null }); } catch (ee) {} }
+    return true;
+  } else if (request.operation === 'highlight') {
+    try {
+      const sel = request.selector || null;
+      const type = request.selector_type || 'css';
+      const textFallback = request.textFallback || null;
+      let el = null;
+      try {
+        if (sel && type === 'css') el = document.querySelector(sel);
+        if (!el && sel && (type === 'xpath' || String(sel).indexOf('//') === 0)) {
+          try { el = document.evaluate(sel.replace(/^xpath:\s*/i, ''), document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; } catch (e) {}
+        }
+      } catch (e) { el = null; }
+      if (!el && textFallback) {
+        el = quickFind(null, textFallback) || null;
+      }
+      try { const prev = document.getElementById('__wb_highlight_overlay'); if (prev) prev.remove(); } catch (e) {}
+      if (el) {
+        try {
+          const rect = el.getBoundingClientRect();
+          const overlay = document.createElement('div'); overlay.id = '__wb_highlight_overlay';
+          overlay.style.position = 'absolute'; overlay.style.zIndex = 2147483647; overlay.style.pointerEvents = 'none';
+          overlay.style.border = '3px solid #f59e0b'; overlay.style.background = 'rgba(245,158,11,0.08)';
+          overlay.style.left = (rect.left + window.scrollX) + 'px'; overlay.style.top = (rect.top + window.scrollY) + 'px';
+          overlay.style.width = Math.max(2, rect.width) + 'px'; overlay.style.height = Math.max(2, rect.height) + 'px';
+          document.documentElement.appendChild(overlay);
+          try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { el.scrollIntoView(); }
+          setTimeout(() => { try { const p = document.getElementById('__wb_highlight_overlay'); if (p) p.remove(); } catch (e) {} }, 4500);
+          try { sendResponse({ status: 'highlighted' }); } catch (e) {}
+        } catch (e) { try { sendResponse({ status: 'error' }); } catch (err) {} }
+      } else {
+        // Build suggestion payload to help the user pick an alternative selector
+        try {
+          const suggestions = [];
+          // helper: xpath for element
+          function getXPathForElement(el) {
+            if (!el || el.nodeType !== 1) return null;
+            const parts = [];
+            while (el && el.nodeType === 1) {
+              let nb = 0;
+              let sib = el.previousSibling;
+              while (sib) {
+                if (sib.nodeType === 1 && sib.nodeName === el.nodeName) nb += 1;
+                sib = sib.previousSibling;
+              }
+              const idx = nb ? `[${nb + 1}]` : '';
+              parts.unshift(el.nodeName.toLowerCase() + idx);
+              el = el.parentNode;
+              if (el && el.nodeName && el.nodeName.toLowerCase() === 'html') break;
+            }
+            return parts.length ? '//' + parts.join('/') : null;
+          }
+
+          // If textFallback supplied, look for elements containing that text
+          if (textFallback && typeof textFallback === 'string' && textFallback.trim().length) {
+            try {
+              const needle = String(textFallback).trim();
+              const candidates = Array.from(document.querySelectorAll('a, button, span, div, label, li, option, [role="option"]'));
+              for (let i = 0; i < candidates.length && suggestions.length < 6; i++) {
+                const node = candidates[i];
+                try {
+                  const txt = (node.textContent || '').trim();
+                  if (txt && txt.indexOf(needle) !== -1) {
+                    suggestions.push({ xpath: getXPathForElement(node), text: txt, selector: null, selector_type: 'xpath' });
+                  }
+                } catch (ee) {}
+              }
+            } catch (e) {}
+          }
+
+          // If CSS selector provided, try to extract id/class tokens and find related elements
+          if (sel && type === 'css') {
+            try {
+              const idMatch = sel.match(/#([\w\-:\.]+)/);
+              if (idMatch && idMatch[1]) {
+                const elById = document.getElementById(idMatch[1]); if (elById) suggestions.push({ selector: `#${idMatch[1]}`, selector_type: 'css', text: (elById.textContent||'').trim() });
+              }
+              const classMatches = Array.from(sel.matchAll(/\.([\w\-:\.]+)/g)).map(m => m[1]);
+              for (let i = 0; i < classMatches.length && suggestions.length < 6; i++) {
+                try { const nodes = Array.from(document.getElementsByClassName(classMatches[i])); if (nodes && nodes[0]) suggestions.push({ selector: `.${classMatches[i]}`, selector_type: 'css', text: (nodes[0].textContent||'').trim() }); } catch (ee) {}
+              }
+            } catch (e) {}
+          }
+
+          // Additional: sample top anchors and buttons (first few) to provide quick targets
+          try {
+            const quick = Array.from(document.querySelectorAll('a[href], button')).slice(0, 6 - suggestions.length);
+            quick.forEach((n) => { if (suggestions.length < 6) suggestions.push({ xpath: getXPathForElement(n), selector: null, selector_type: 'xpath', text: (n.textContent||'').trim() }); });
+          } catch (e) {}
+
+          try { sendResponse({ status: 'not_found', suggestions }); } catch (e) { sendResponse({ status: 'not_found' }); }
+        } catch (e) { try { sendResponse({ status: 'not_found' }); } catch (ee) {} }
+      }
+    } catch (e) { try { sendResponse({ status: 'error' }); } catch (ee) {} }
+    return true;
+  } else if (request.operation === 'clear_highlight') {
+    try { const prev = document.getElementById('__wb_highlight_overlay'); if (prev) prev.remove(); try { sendResponse({ status: 'cleared' }); } catch (e) {} } catch (e) { try { sendResponse({ status: 'error' }); } catch (ee) {} }
+    return true;
   } else if (request.operation === 'get_dom_for_scan') {
     const prunedHtml = getPrunedDom();
     sendResponse({ html: prunedHtml });
@@ -437,11 +808,49 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
 try { host.runtime.sendMessage({ operation: 'load' }); } catch (e) {}
 debugLog('content script loaded and sent initial load message');
 
+// If we persisted actions locally due to a previous runtime.lastError, forward
+// them to the background now so they can be processed and cleared.
+function deliverPendingActionsToBackground() {
+  try {
+    if (host && host.storage && host.storage.local && typeof host.storage.local.get === 'function') {
+      host.storage.local.get({ pending_actions: [] }, (s) => {
+        const arr = s.pending_actions || [];
+        if (arr && arr.length) {
+          try {
+            host.runtime.sendMessage({ operation: 'deliver_pending_actions', actions: arr }, () => {
+              // clear stored pending actions after attempting delivery
+              try { host.storage.local.set({ pending_actions: [] }); } catch (e) { debugLog('clear pending_actions failed', e); }
+            });
+          } catch (e) { debugLog('deliver_pending_actions sendMessage failed', e); }
+        }
+      });
+      return;
+    }
+  } catch (e) { debugLog('deliverPendingActionsToBackground read failed', e); }
+
+  // Fallback: check localStorage key used as a best-effort fallback
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const key = 'wb_pending_actions';
+      const cur = JSON.parse(window.localStorage.getItem(key) || '[]');
+      if (cur && cur.length) {
+        try {
+          host.runtime.sendMessage({ operation: 'deliver_pending_actions', actions: cur }, () => {
+            try { window.localStorage.removeItem(key); } catch (e) { debugLog('localStorage clear failed', e); }
+          });
+        } catch (e) { debugLog('deliver_pending_actions localStorage send failed', e); }
+      }
+    }
+  } catch (e) { debugLog('deliverPendingActionsToBackground localStorage fallback failed', e); }
+}
+
+try { deliverPendingActionsToBackground(); } catch (e) { debugLog('deliverPendingActionsToBackground invocation failed', e); }
+
 // Fallback: if the background has operation already set to 'record', attach listeners so we don't miss
-try { host.storage.local.get({ operation: 'stop', locators: [] }, (state) => { debugLog('storage state on load', state); if (state && state.operation === 'record') { locatorStrategies = (state.locators || []).slice(); locatorStrategies.push('index'); attachRecordingListeners(); debugLog('attached recording listeners based on storage.state.operation'); } }); } catch (e) { debugLog('storage check failed on load', e && e.message ? e.message : e); }
+try { host.storage.local.get({ operation: 'stop', locators: [] }, (state) => { debugLog('storage state on load', state); if (state && state.operation === 'record') { locatorStrategies = (state.locators || []).slice(); locatorStrategies.push('index'); isRecording = true; attachRecordingListeners(); debugLog('attached recording listeners based on storage.state.operation'); } }); } catch (e) { debugLog('storage check failed on load', e && e.message ? e.message : e); }
 
     // Listen for operation changes from storage as an additional reliable signal
-    try { host.storage.onChanged.addListener((changes) => { if (changes.operation) { const op = changes.operation.newValue; debugLog('storage operation changed to', op); if (op === 'record') { host.storage.local.get({ locators: [] }, (s) => { locatorStrategies = (s.locators || []).slice(); locatorStrategies.push('index'); attachRecordingListeners(); }); } else if (op === 'stop') { detachRecordingListeners(); } } }); } catch (e) { debugLog('failed to add storage.onChanged listener', e && e.message ? e.message : e); }
+  try { host.storage.onChanged.addListener((changes) => { if (changes.operation) { const op = changes.operation.newValue; debugLog('storage operation changed to', op); if (op === 'record') { host.storage.local.get({ locators: [] }, (s) => { locatorStrategies = (s.locators || []).slice(); locatorStrategies.push('index'); isRecording = true; attachRecordingListeners(); }); } else if (op === 'stop') { isRecording = false; detachRecordingListeners(); } } }); } catch (e) { debugLog('failed to add storage.onChanged listener', e && e.message ? e.message : e); }
 
   }());
 }

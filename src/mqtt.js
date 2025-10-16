@@ -7,8 +7,12 @@ function initMqttIfEnabled() {
   try {
     // Prefer control broker settings (separate from LLM/AI broker). Fall back to legacy `mqtt_broker` for compatibility.
     storage.get({ mqtt_ctrl_broker: {}, mqtt_ctrl_enabled: false, mqtt_broker: {} }, (cfg) => {
-      const broker = cfg.mqtt_ctrl_broker && Object.keys(cfg.mqtt_ctrl_broker).length ? cfg.mqtt_ctrl_broker : (cfg.mqtt_broker || {});
-      const enabled = (typeof cfg.mqtt_ctrl_enabled !== 'undefined') ? cfg.mqtt_ctrl_enabled : (cfg.mqtt_enabled || false);
+      const broker = (cfg.mqtt_ctrl_broker && Object.keys(cfg.mqtt_ctrl_broker).length)
+        ? cfg.mqtt_ctrl_broker
+        : (cfg.mqtt_broker || {});
+      const enabled = (typeof cfg.mqtt_ctrl_enabled !== 'undefined')
+        ? cfg.mqtt_ctrl_enabled
+        : (cfg.mqtt_enabled || false);
       // Default to localhost websocket broker if nothing configured
       if (!broker || !broker.brokerUrl) broker.brokerUrl = broker.brokerUrl || 'ws://localhost:9001';
       bgDebug('initMqttIfEnabled read storage', { mqtt_ctrl_enabled: enabled, mqtt_ctrl_broker: broker });
@@ -132,7 +136,11 @@ function initMqttIfEnabled() {
           try {
             storage.get({ suggestions: [] }, (s) => {
               const arr = s.suggestions || [];
-              arr.push({ id: payload.id || `sugg-${Date.now()}`, time: Date.now(), payload });
+              arr.push({
+                id: payload.id || `sugg-${Date.now()}`,
+                time: Date.now(),
+                payload
+              });
               storage.set({ suggestions: arr });
             });
           } catch (e) { console.warn('MQTT suggestion store failed', e); }

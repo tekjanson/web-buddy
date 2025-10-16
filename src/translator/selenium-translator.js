@@ -7,7 +7,10 @@
   if (typeof module !== 'undefined' && module.exports) {
     module.exports.translator = factory();
   } else {
-    try { root.translators = root.translators || {}; root.translators.selenium = factory(); } catch (e) {}
+    try {
+      root.translators = root.translators || {};
+      root.translators.selenium = factory();
+    } catch (e) {}
   }
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   function escapeJs(s) { return String(s || '').replace(/'/g, "\\'"); }
@@ -43,7 +46,10 @@
           "})();"
         ];
         const body = [];
-        list.forEach((a) => { const l = buildAction(a); if (l) body.push('    ' + l); });
+        list.forEach((a) => {
+          const l = buildAction(a);
+          if (l) body.push('    ' + l);
+        });
         return header.concat(body, footer).join('\n');
       } catch (e) { return ''; }
     },

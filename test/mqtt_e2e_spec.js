@@ -51,12 +51,22 @@ describe.skip('MQTT E2E control -> getDOM -> AI steps', function () {
       // end clients if present, then call done
       const finishClients = [];
       try {
-        if (controller) finishClients.push(new Promise((res) => controller.end(true, res)));
+        if (controller) {
+          finishClients.push(
+            new Promise((res) => controller.end(true, res))
+          );
+        }
       } catch (e) {}
       try {
-        if (extensionClient) finishClients.push(new Promise((res) => extensionClient.end(true, res)));
+        if (extensionClient) {
+          finishClients.push(
+            new Promise((res) => extensionClient.end(true, res))
+          );
+        }
       } catch (e) {}
-      Promise.all(finishClients).then(() => done(err)).catch(() => done(err));
+      Promise.all(finishClients)
+        .then(() => done(err))
+        .catch(() => done(err));
     }
 
     extensionClient.on('error', (e) => { console.error('[test] extension client error', e); safeDone(e); });
@@ -66,13 +76,27 @@ describe.skip('MQTT E2E control -> getDOM -> AI steps', function () {
         // attach single message handler for extension
         extensionClient.on('message', (topic, message) => {
           let payload = null;
-          try { payload = JSON.parse(message.toString()); } catch (e) { payload = message.toString(); }
+          try {
+            payload = JSON.parse(message.toString());
+          } catch (e) {
+            payload = message.toString();
+          }
           console.debug('[test] extension received message on', topic, payload);
           const cmd = (payload && payload.command) ? payload.command : payload;
           if (cmd && cmd.action === 'getDOM') {
             const requestId = cmd.requestId || 'r1';
             const respTopic = `${prefix}/resp/${requestId}`;
-            const envelope = { protocolVersion: '1.0', requestId, type: 'response', status: 'ok', timestamp: Date.now(), action: 'getDOM', payload: { html: '<html><body><button id="b1">Click</button></body></html>' } };
+            const envelope = {
+              protocolVersion: '1.0',
+              requestId,
+              type: 'response',
+              status: 'ok',
+              timestamp: Date.now(),
+              action: 'getDOM',
+              payload: {
+                html: '<html><body><button id="b1">Click</button></body></html>'
+              }
+            };
             console.debug('[test] extension publishing response to', respTopic);
             extensionClient.publish(respTopic, JSON.stringify(envelope));
           }
@@ -86,15 +110,28 @@ describe.skip('MQTT E2E control -> getDOM -> AI steps', function () {
           const respTopic = `${prefix}/resp/${requestId}`;
           controller.subscribe(respTopic, { qos: 0 }, () => {
             // publish command
-            const cmd = { protocolVersion: '1.0', requestId, type: 'command', action: 'getDOM', command: { action: 'getDOM', requestId } };
+            const cmd = {
+              protocolVersion: '1.0',
+              requestId,
+              type: 'command',
+              action: 'getDOM',
+              command: { action: 'getDOM', requestId }
+            };
             controller.publish(controlTopic, JSON.stringify(cmd));
             // add a test-level timeout
-            testTimer.id = setTimeout(() => safeDone(new Error('test timeout waiting for response')), 10000);
+            testTimer.id = setTimeout(
+              () => safeDone(new Error('test timeout waiting for response')),
+              10000
+            );
           });
 
-          controller.on('message', (topic, message) => {
+            controller.on('message', (topic, message) => {
             let payload = null;
-            try { payload = JSON.parse(message.toString()); } catch (e) { payload = message.toString(); }
+            try {
+              payload = JSON.parse(message.toString());
+            } catch (e) {
+              payload = message.toString();
+            }
             console.debug('[test] controller received message on', topic, payload);
             try {
               expect(payload).to.be.an('object');

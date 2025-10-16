@@ -14,9 +14,9 @@
       <h1>Custom Locators</h1>
       <div id="hint">Add your own flavoured locators! Separate with a commas.</div>
     </div>
-    <input type="text" id="custom-locators"/>
-    <button class="btn btn-wide" id="reset">Reset</button>
-    <button class="btn btn-wide" id="update">Update</button>
+  <input type="text" id="custom-locators" aria-label="Custom locators" placeholder="e.g. data-testid,my-custom-attr"/>
+  <button type="button" class="btn btn-wide" id="reset">Reset</button>
+  <button type="button" class="btn btn-wide" id="update">Update</button>
   </div>
 </div>
 <div class="panel-options">
@@ -26,9 +26,9 @@
       <div id="hint-policy">Control how MQTT/LLM commands are handled by the extension.</div>
     </div>
     <label for="output-translator">Output Format (default: Cypress)</label>
-    <select id="output-translator">
+    <select id="output-translator" aria-label="Output translator">
       <option value="robot">RobotFramework</option>
-      <option value="cypress">Cypress (default)</option>
+      <option value="cypress">Cypress</option>
       <option value="playwright">Playwright</option>
       <option value="selenium">Selenium (WebDriver)</option>
     </select>
@@ -39,12 +39,12 @@
     </select>
 
     <label for="allowed-actions">Allowed actions (comma-separated)</label>
-    <input type="text" id="allowed-actions" />
+  <input type="text" id="allowed-actions" aria-label="Allowed actions" placeholder="click,navigate,input" />
 
     <label for="per-test-type">Per test type (json)</label>
-    <input type="text" id="per-test-type" />
+  <input type="text" id="per-test-type" aria-label="Per test type JSON" placeholder='{"unit": ["click"]}' />
 
-    <button class="btn btn-wide" id="save-policy">Save Policy</button>
+  <button type="button" class="btn btn-wide" id="save-policy">Save Policy</button>
   </div>
 </div>
 <div class="panel-options">
@@ -55,27 +55,27 @@
     </div>
 
     <label for="ai-provider">Select Provider</label>
-    <select id="ai-provider">
+    <select id="ai-provider" aria-label="AI provider">
       <option value="mqtt">MQTT</option>
       <option value="gemini">Gemini</option>
     </select>
 
     <div id="mqtt-settings">
-      <label for="broker-url">Broker URL (wss:// or ws://)</label>
-      <input type="text" id="broker-url" />
+  <label for="broker-url">Broker URL (wss:// or ws://)</label>
+  <input type="text" id="broker-url" placeholder="ws://localhost:9001" />
 
-      <label for="client-id">Client ID</label>
-      <input type="text" id="client-id" />
+  <label for="client-id">Client ID</label>
+  <input type="text" id="client-id" placeholder="optional" />
 
-      <label for="username">Username (optional)</label>
-      <input type="text" id="username" />
+  <label for="username">Username (optional)</label>
+  <input type="text" id="username" placeholder="optional" />
 
-      <label for="password">Password (optional)</label>
-      <input type="password" id="password" />
+  <label for="password">Password (optional)</label>
+  <input type="password" id="password" placeholder="optional" />
 
       <div style="display:flex; gap:8px; align-items:center;">
-        <button class="btn btn-wide" id="save-broker">Save Broker</button>
-        <button class="btn btn-wide" id="test-broker">Test Connection</button>
+  <button type="button" class="btn btn-wide" id="save-broker">Save Broker</button>
+  <button type="button" class="btn btn-wide" id="test-broker">Test Connection</button>
         <span id="broker-status" aria-live="polite" style="margin-left:8px;color:#333;font-size:0.95rem"></span>
       </div>
     </div>

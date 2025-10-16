@@ -46,13 +46,32 @@ function classifier(element) {
   } else if (tag === 'a') {
     hash = { type: 'a', value: element.href };
   } else if (element.innerText != null && element.innerText !== '') {
-    hash = { type: 'containsText', value: element.innerText.substring(0, 15) };
-  } else if (element.parentNode && element.parentNode.textContent != null && element.parentNode.textContent !== '') {
+    hash = {
+      type: 'containsText',
+      value: element.innerText.substring(0, 15)
+    };
+  } else if (
+    element.parentNode && element.parentNode.textContent != null && element.parentNode.textContent !== ''
+  ) {
     const pTag = _searchForText(element.parentNode, element.parentNode.textContent);
-    hash = { type: 'parentContainsText', value: element.parentNode.textContent.substring(0, 15), parentTag: pTag };
-  } else if (element.parentNode && element.parentNode.parentNode && element.parentNode.parentNode.textContent != null && element.parentNode.parentNode.textContent !== '') {
-    const pTag = _searchForText(element.parentNode.parentNode, element.parentNode.parentNode.textContent);
-    hash = { type: 'parentParentContainsText', value: element.parentNode.parentNode.textContent.substring(0, 15), parentTag: pTag };
+    hash = {
+      type: 'parentContainsText',
+      value: element.parentNode.textContent.substring(0, 15),
+      parentTag: pTag
+    };
+  } else if (
+    element.parentNode && element.parentNode.parentNode
+    && element.parentNode.parentNode.textContent != null && element.parentNode.parentNode.textContent !== ''
+  ) {
+    const pTag = _searchForText(
+      element.parentNode.parentNode,
+      element.parentNode.parentNode.textContent
+    );
+    hash = {
+      type: 'parentParentContainsText',
+      value: element.parentNode.parentNode.textContent.substring(0, 15),
+      parentTag: pTag
+    };
   }
 
   return hash;

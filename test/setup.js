@@ -27,12 +27,14 @@ chrome = {
     local: {
       set: () => {},
       get: () => {},
-      onChanged: { addListener: () => {} }
-    }
+    },
+    // Provide a top-level onChanged for code that references chrome.storage.onChanged
+    onChanged: { addListener: () => {} }
   },
   runtime: {
     lastError: null,
-    sendMessage: () => {}
+    sendMessage: () => {},
+    onMessage: { addListener: () => {} }
   },
   offscreen: { createDocument: () => {} }
 };

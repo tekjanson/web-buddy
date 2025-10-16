@@ -77,12 +77,23 @@
         </button>
 
         <button
+          type="button"
           class="btn btn-wide"
           id="run"
           tabindex="-1"
           title="run recorded steps in active tab"
         >
           run
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-wide"
+          id="ai-assist"
+          tabindex="-1"
+          title="Have the AI suggest actions for this page"
+        >
+          AI Assist
         </button>
 
         <button
@@ -174,6 +185,11 @@
       <label for="chat-input">AI Chat</label>
       <div id="chat-window" aria-live="polite" role="log"></div>
       <textarea id="chat-input" placeholder="Ask the AI..." rows="3"></textarea>
+      <div style="margin-top:6px;">
+        <label for="site-instructions">Site instructions (editable)</label>
+        <textarea id="site-instructions" placeholder="Site-specific hints will appear here if available" rows="3"></textarea>
+        <div class="small muted">Instructions are fetched from the current site at <code>/ai-instructions</code> when available, otherwise you can save per-site hints in extension settings.</div>
+      </div>
       <div>
         <button class="btn btn-wide" id="chat-send">Send</button>
       </div>
@@ -190,7 +206,10 @@
       ></textarea>
     </div>
 
-    <script src="popup.js"></script>
+  <script src="popup-helpers.js"></script>
+  <script src="popup.js"></script>
+  <script src="popup-ai.js"></script>
+  <script src="popup-chat.js"></script>
     <div id="keywordDiv">
       <!-- <input type="button"> </input> -->
       <!-- <select id="keywordSelect">

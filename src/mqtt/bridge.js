@@ -58,7 +58,8 @@
       this.client.on('connect', () => {
         this.connected = true;
         // subscribe to control & suggestions topics
-  const prefix = cfg.topicPrefix || `web-buddy/${opts.clientId || 'client'}`;
+  const prefix = cfg.topicPrefix
+    || `web-buddy/${opts.clientId || 'client'}`;
         const controlTopic = `${prefix}/control`;
         const suggestionsTopic = `${prefix}/suggestions`;
         this.client.subscribe(controlTopic, { qos: 0 }, () => {});
@@ -69,7 +70,11 @@
 
       this.client.on('message', (topic, message) => {
         let payload = null;
-        try { payload = JSON.parse(message.toString()); } catch (e) { payload = message.toString(); }
+        try {
+          payload = JSON.parse(message.toString());
+        } catch (e) {
+          payload = message.toString();
+        }
         if (typeof payload === 'object' && payload.type === 'command') {
           this.onControl(payload);
         } else if (typeof payload === 'object' && payload.type === 'suggestion') {

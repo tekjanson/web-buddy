@@ -82,7 +82,15 @@ function executeListInTab(listToExecute) {
           storage.get({ pending_commands: {} }, (s) => {
             const pending = s.pending_commands || {};
             pending[tabObj.id] = { commands: remaining || [], time: Date.now() };
-            storage.set({ pending_commands: pending }, () => { bgDebug('executeListInTab: persisted pending commands for tab', tabObj.id, remaining && remaining.length, 'pending_preview', (remaining && remaining.slice ? remaining.slice(0,3) : remaining)); });
+            storage.set({ pending_commands: pending }, () => {
+              bgDebug(
+                'executeListInTab: persisted pending commands for tab',
+                tabObj.id,
+                remaining && remaining.length,
+                'pending_preview',
+                (remaining && remaining.slice ? remaining.slice(0, 3) : remaining)
+              );
+            });
           });
         } catch (e) { bgDebug('failed to persist pending commands', e); }
       } catch (e) { bgDebug('executeListInTab navigation failed', e); }
@@ -106,11 +114,32 @@ function handleSingleScriptAction(script) {
   selection(script, list);
   // update live script preview so popup shows recorded steps as they arrive
   try {
-    const liveScript = getTranslator(selectedTranslator).generateOutput(list, maxLength, demo, verify);
+    const liveScript = getTranslator(selectedTranslator)
+      .generateOutput(list, maxLength, demo, verify);
     storage.set({ message: liveScript, canSave: false });
+    // persist updated actions so popup can read them
+    try { storage.set({ last_actions: list }); } catch (e) { bgDebug('failed to persist last_actions (single)', e); }
+    // update central state so other modules see the new list
+    try { updateState({ list }); } catch (e) { bgDebug('failed to updateState(list) in single handler', e); }
   } catch (e) { console.warn('Failed to update live script message', e); }
-  icon.setIcon({ path: logo.action });
-  setTimeout(() => { icon.setIcon({ path: logo.record }); }, 1000);
+  // Use a short, visible flash by swapping to the 'stop' icon (deep red)
+  // then revert to the recording icon so the user sees a distinct flash.
+  try {
+    icon.setIcon({ path: logo.stop });
+    setTimeout(() => { try { icon.setIcon({ path: logo.record }); } catch (e) {} }, 400);
+  } catch (e) {}
+  // Also attempt a badge flash as an additional visual cue when available.
+  try {
+    if (host && host.action && typeof host.action.setBadgeBackgroundColor === 'function') {
+      host.action.setBadgeBackgroundColor({ color: '#b91c1c' });
+      host.action.setBadgeText({ text: '\u2022' });
+      setTimeout(() => { try { host.action.setBadgeText({ text: '' }); } catch (e) {} }, 800);
+    } else if (host && host.browserAction && typeof host.browserAction.setBadgeBackgroundColor === 'function') {
+      host.browserAction.setBadgeBackgroundColor({ color: '#b91c1c' });
+      host.browserAction.setBadgeText({ text: '\u2022' });
+      setTimeout(() => { try { host.browserAction.setBadgeText({ text: '' }); } catch (e) {} }, 800);
+    }
+  } catch (e) {}
 }
 
 function handleBatchScriptAction(scripts) {
@@ -119,13 +148,23 @@ function handleBatchScriptAction(scripts) {
   const newList = list.concat(scripts || []);
   updateState({ list: newList });
   bgDebug('list length after concat', newList.length);
-  const generatedScript = getTranslator(selectedTranslator).generateOutput(newList, maxLength, demo, verify);
+  const generatedScript = getTranslator(selectedTranslator)
+    .generateOutput(newList, maxLength, demo, verify);
   storage.set({ message: generatedScript, operation: 'stop', isBusy: false });
-  try { storage.set({ last_actions: newList }); } catch (e) { bgDebug('failed to persist last_actions', e); }
+  try { storage.set({ last_actions: newList }); } catch (e) { bgDebug('failed to persist last_actions (batch)', e); }
   // Optionally publish actions to MQTT if active
   if (mqttActive && typeof MqttBridge !== 'undefined' && typeof translators !== 'undefined' && translators.mqtt) {
-    try { MqttBridge.publishActions(mqttPrefix, translators.mqtt.generateOutput(newList)); } catch (e) { console.warn('Failed to publish actions to MQTT', e); }
+    try {
+      MqttBridge.publishActions(mqttPrefix, translators.mqtt.generateOutput(newList));
+    } catch (e) {
+      console.warn('Failed to publish actions to MQTT', e);
+    }
   }
+  try {
+    // Briefly flash the stop (deep red) icon to indicate a batch of actions arrived
+    icon.setIcon({ path: logo.stop });
+    setTimeout(() => { try { icon.setIcon({ path: logo.record }); } catch (e) {} }, 400);
+  } catch (e) {}
 }
 
 function handleMessage(request, sender, sendResponse) {
@@ -162,8 +201,12 @@ function handleMessage(request, sender, sendResponse) {
         storage.get({ pending_commands: {} }, (s2) => {
           const pending = s2.pending_commands || {};
           const entry = pending[tabId];
-          if (entry && Array.isArray(entry.commands) && entry.commands.length) {
-            bgDebug('content attached: found pending commands for tab', tabId, entry.commands.length, 'preview', (entry.commands && entry.commands.slice ? entry.commands.slice(0,3) : entry.commands));
+          // Only auto-execute pending commands if the entry explicitly allows it
+          if (entry && Array.isArray(entry.commands)
+            && entry.commands.length && entry.autoRun !== false) {
+            bgDebug('content attached: found pending commands for tab', tabId,
+              entry.commands.length, 'preview', (entry.commands && entry.commands.slice
+              ? entry.commands.slice(0, 3) : entry.commands));
             const tabObj = { id: tabId };
             try {
               sendMessageWithHandshake(tabObj, { operation: 'execute_commands', commands: entry.commands }, 1200);
@@ -171,6 +214,8 @@ function handleMessage(request, sender, sendResponse) {
             // clear pending for this tab
             delete pending[tabId];
             storage.set({ pending_commands: pending }, () => { bgDebug('content attached: cleared pending_commands for tab', tabId); });
+          } else if (entry && entry.autoRun === false) {
+            bgDebug('content attached: pending commands for tab exist but autoRun is false; skipping automatic execution for', tabId);
           }
         });
       } catch (e) { bgDebug('content attached: failed to check pending_commands', e); }
@@ -200,8 +245,10 @@ function handleMessage(request, sender, sendResponse) {
         updateState({ recordTab: tabObj, list: [{ type: 'url', path: tabObj.url, time: 0, trigger: 'record', title: tabObj.title }] });
         // Try handshake first, then also send the operation directly as a fallback so
         // the content script will attach listeners even if the handshake race occurs.
-        sendMessageWithHandshake(tabObj, { operation, locators: request.locators });
-        try { sendMessageToTabObj(tabObj, { operation, locators: request.locators }); } catch (e) { bgDebug('direct sendMessageToTabObj failed', e); }
+          // Proactively attempt to inject the content script before sending messages
+          try { ensureContentInjected(tabObj.id); } catch (ie) { bgDebug('ensureContentInjected at record start failed', ie); }
+          sendMessageWithHandshake(tabObj, { operation, locators: request.locators });
+          try { sendMessageToTabObj(tabObj, { operation, locators: request.locators }); } catch (e) { bgDebug('direct sendMessageToTabObj failed', e); }
       } else if (back_tabs) {
         updateState({ recordTab: back_tabs, list: [{ type: 'url', path: back_tabs.url, time: 0, trigger: 'record', title: back_tabs.title }] });
         sendMessageWithHandshake(back_tabs, { operation, locators: request.locators });
@@ -272,15 +319,63 @@ function handleMessage(request, sender, sendResponse) {
       file = '';
     }
     const blob = new Blob([file], { type: 'text/plain;charset=utf-8' });
-    try { if (typeof URL !== 'undefined' && host.downloads && host.downloads.download) { host.downloads.download({ url: URL.createObjectURL(blob, { oneTimeOnly: true }), filename }); } else throw new Error('downloads API or URL unavailable'); } catch (e) { const fileText = file; storage.set({ last_file: { filename, body: fileText, time: Date.now() } }); }
+    try {
+      if (typeof URL !== 'undefined' && host.downloads && host.downloads.download) {
+        host.downloads.download({
+          url: URL.createObjectURL(blob, { oneTimeOnly: true }),
+          filename
+        });
+      } else throw new Error('downloads API or URL unavailable');
+    } catch (e) {
+      const fileText = file;
+      storage.set({ last_file: { filename, body: fileText, time: Date.now() } });
+    }
   } else if (operation == 'pom') {
     storage.set({ message: statusMessage[operation], operation, canSave: false });
   } else if (operation === 'settings') {
     updateState({ demo: request.demo, verify: request.verify });
     storage.set({ locators: request.locators, demo: request.demo, verify: request.verify });
   } else if (operation === 'load') {
-    storage.get({ operation: 'stop', locators: [] }, (state) => { const target = (sender && sender.tab) ? sender.tab : null; if (target) sendMessageToTabObj(target, { operation: state.operation, locators: state.locators }); else console.warn('No sender.tab available to respond to load request'); });
+    storage.get({ operation: 'stop', locators: [] }, (state) => {
+      const target = (sender && sender.tab) ? sender.tab : null;
+      if (target) {
+        // Inform the content script of current operation state
+        try { sendMessageToTabObj(target, { operation: state.operation, locators: state.locators }); } catch (e) { bgDebug('load: sendMessageToTabObj failed', e); }
+        // Also check for any pending commands persisted for this tab (e.g., after navigation)
+        try {
+          storage.get({ pending_commands: {} }, (s) => {
+            const pending = s.pending_commands || {};
+            const entry = pending[target.id];
+            if (entry && Array.isArray(entry.commands) && entry.commands.length) {
+              if (entry.autoRun === false) {
+                bgDebug('load: pending commands found for tab but autoRun is false; skipping automatic resend for', target.id);
+              } else {
+                bgDebug('load: found pending commands for tab, resending', target.id, entry.commands.length);
+                try { sendMessageWithHandshake(target, { operation: 'execute_commands', commands: entry.commands }, 1200); } catch (err) { bgDebug('load: resend sendMessageWithHandshake failed', err); }
+                // Clear pending entry
+                delete pending[target.id];
+                try { storage.set({ pending_commands: pending }); } catch (err) { bgDebug('load: failed to clear pending_commands', err); }
+              }
+            }
+          });
+        } catch (e) { bgDebug('load: failed to check pending_commands', e); }
+      } else {
+        console.warn('No sender.tab available to respond to load request');
+      }
+    });
   } else if (operation === 'info') { host.tabs.create({ url });
+  } else if (operation === 'persist_commands') {
+    // Persist commands requested by content script (e.g., right before navigation)
+    try {
+      const tabId = sender && sender.tab && sender.tab.id;
+      const cmds = request.commands || [];
+      if (!tabId) { bgDebug('persist_commands: no sender.tab.id available'); }
+      storage.get({ pending_commands: {} }, (s) => {
+        const pending = s.pending_commands || {};
+        pending[tabId] = { commands: cmds || [], time: Date.now(), source: 'persist_commands' };
+        storage.set({ pending_commands: pending }, () => { bgDebug('persist_commands: persisted', tabId, cmds && cmds.length); });
+      });
+    } catch (e) { bgDebug('persist_commands handler failed', e); }
   } else if (operation === 'chat') {
     // Send a chat request to qms-ai/chat/request using a per-request returnTopic
     const input = request.input || '';
@@ -306,7 +401,10 @@ function handleMessage(request, sender, sendResponse) {
     // If the background receiver provided context in the request (from popup), attach it
     try {
       if (request && request.context && request.context.tokenId) {
-        envelope.payload.context = { tokenId: request.context.tokenId, uuid: request.context.uuid || (request.callback && request.callback.uuid) || null };
+        envelope.payload.context = {
+          tokenId: request.context.tokenId,
+          uuid: request.context.uuid || (request.callback && request.callback.uuid) || null
+        };
       }
     } catch (e) {}
 
@@ -370,12 +468,21 @@ function handleMessage(request, sender, sendResponse) {
                 const candidate = (resp.data.candidates && resp.data.candidates[0]) || null;
                 const text = (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0] && candidate.content.parts[0].text) || (typeof resp.data === 'string' ? resp.data : null);
                 if (text) {
-                  sendResponse({ requestId, payload: { data: { reply: { text } } }, raw: resp.data });
+                  sendResponse({
+                    requestId,
+                    payload: { data: { reply: { text } } },
+                    raw: resp.data
+                  });
                 } else {
-                  sendResponse({ requestId, payload: { data: { reply: { text: null } } }, raw: resp.data });
+                  sendResponse({
+                    requestId,
+                    payload: { data: { reply: { text: null } } },
+                    raw: resp.data
+                  });
                 }
               } else {
-                const errMsg = (resp && resp.error && (resp.error.message || resp.error)) || 'Unknown Gemini error';
+                const errMsg = (resp && resp.error && (resp.error.message || resp.error))
+                  || 'Unknown Gemini error';
                 sendResponse({ requestId, error: errMsg });
               }
               offscreenApiCallCallbacks.delete(callId);
@@ -410,7 +517,11 @@ function handleMessage(request, sender, sendResponse) {
         const onMessage = (topic, message) => {
           if (topic !== subscribeTopic) return;
           let payload = null;
-          try { payload = JSON.parse(message.toString()); } catch (e) { payload = message.toString(); }
+          try {
+            payload = JSON.parse(message.toString());
+          } catch (e) {
+            payload = message.toString();
+          }
           bgDebug('chat reply received', payload);
 
           // Cleanup subscription and handler
@@ -502,15 +613,21 @@ function handleMessage(request, sender, sendResponse) {
     return true;
   } else if (operation === 'action') {
     bgDebug('received action message', request);
-    if (handleActionForPomSelection(request)) {
-      // The POM selection flow consumed this action, so we stop here.
-      // The handler sets request.script to null to prevent re-processing.
-      if (request.script) handleSingleScriptAction(request.script);
-    } else if (request.script) {
-      handleSingleScriptAction(request.script);
-    } else if (request.scripts) {
-      handleBatchScriptAction(request.scripts);
-    }
+    try {
+      // If POM selection is active it may consume the action, but we still
+      // want to persist any script(s) delivered so the recorded list grows.
+      if (request.script) {
+        handleSingleScriptAction(request.script);
+      }
+      if (request.scripts && Array.isArray(request.scripts) && request.scripts.length) {
+        handleBatchScriptAction(request.scripts);
+      }
+      // Additionally, ensure last_actions storage is up-to-date (defensive)
+      try { storage.set({ last_actions: list }); } catch (e) { bgDebug('action handler: failed to persist last_actions', e); }
+      try { updateState({ list }); } catch (e) { bgDebug('action handler: failed to updateState(list)', e); }
+      // Allow POM selection hook to still process if it needs to alter behavior
+      try { handleActionForPomSelection(request); } catch (e) { /* ignore */ }
+    } catch (e) { bgDebug('action handler failed', e); }
   }
   else if (operation === 'run_translated') {
     // Accept either a `list` (recorded attributes) or `commands` (already canonical)
@@ -539,6 +656,28 @@ function handleMessage(request, sender, sendResponse) {
     } else {
       bgDebug('Received a Gemini API response for an unknown callId:', request.callId);
     }
+
+  } else if (operation === 'deliver_pending_actions') {
+    // Content script is forwarding locally persisted actions that failed to reach
+    // the background previously. Process them as if they had just arrived.
+    try {
+      const actions = request.actions || [];
+      if (actions && actions.length) {
+        actions.forEach((entry) => {
+          try {
+            if (entry && entry.payload) {
+              // payload may contain 'script' or 'scripts'
+              const p = entry.payload;
+              if (p.script) handleSingleScriptAction(p.script);
+              else if (p.scripts) handleBatchScriptAction(p.scripts);
+            }
+          } catch (e) { bgDebug('failed to process delivered pending action', e); }
+        });
+        try { storage.set({ last_actions: list }); } catch (e) { bgDebug('failed to persist last_actions after delivering pending', e); }
+      }
+    } catch (e) { bgDebug('deliver_pending_actions handler failed', e); }
+    try { sendResponse({ status: 'accepted' }); } catch (e) {}
+    return;
   }
   else if (request.type === 'offscreen-ready') {
     // This is a signal from the offscreen document that it has loaded.
@@ -548,7 +687,12 @@ function handleMessage(request, sender, sendResponse) {
   else if (operation === 'mqtt_status') {
     // return useful diagnostics for debugging MQTT (control & LLM brokers)
     try {
-      storage.get({ mqtt_ctrl_enabled: false, mqtt_ctrl_broker: {}, mqtt_llm_enabled: false, mqtt_llm_broker: {} }, (cfg) => {
+      storage.get({
+        mqtt_ctrl_enabled: false,
+        mqtt_ctrl_broker: {},
+        mqtt_llm_enabled: false,
+        mqtt_llm_broker: {}
+      }, (cfg) => {
         const ctrlBroker = cfg.mqtt_ctrl_broker || {};
         const ctrlEnabled = !!cfg.mqtt_ctrl_enabled;
         const llmBroker = cfg.mqtt_llm_broker || {};

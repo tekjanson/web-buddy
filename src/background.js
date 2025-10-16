@@ -127,66 +127,91 @@ function sendMessageWithHandshake(tabObj, message, timeout = 300) {
     return;
   }
 
+  // Attempt handshake a few times with small backoff. If all attempts fail,
+  // persist the message to pending_messages so the content script can pick it up
+  // later or an operator can inspect it.
   let replied = false;
   let persisted = false;
-  bgDebug('sendMessageWithHandshake start', tabObj.id, message);
-  try {
-    host.tabs.sendMessage(tabObj.id, { type: 'handshake' }, (resp) => {
-      const lastErr = host.runtime && host.runtime.lastError;
-      if (lastErr) {
-        const msg = lastErr && lastErr.message ? lastErr.message : String(lastErr);
-        const benignRe = /Receiving end does not exist|Could not establish connection|The message port closed before a response/;
-        if (benignRe.test(msg)) {
-          bgDebug('handshake benign', msg, 'for tab', tabObj.id);
-          storage.get({ pending_messages: [] }, (s) => {
-            const arr = s.pending_messages || [];
-            arr.push({ tabId: tabObj.id, message, time: Date.now(), error: msg, handshake: false, benign: true });
-            storage.set({ pending_messages: arr });
-            persisted = true;
-          });
+  const maxAttempts = 3;
+  const baseDelay = 120; // ms
+  let attempt = 0;
+
+  function tryOnce() {
+    attempt += 1;
+    bgDebug('sendMessageWithHandshake attempt', attempt, 'for tab', tabObj.id);
+    try {
+      // Ensure content script is injected before attempting handshake
+      try { injectContentScript(tabObj.id); } catch (ie) { bgDebug('injectContentScript pre-handshake failed', ie); }
+
+      host.tabs.sendMessage(tabObj.id, { type: 'handshake' }, (resp) => {
+        const lastErr = host.runtime && host.runtime.lastError;
+        if (lastErr) {
+          const msg = lastErr && lastErr.message ? lastErr.message : String(lastErr);
+          bgDebug('handshake attempt error', msg, 'attempt', attempt);
+          if (attempt >= maxAttempts) {
+            const benignRe = /Receiving end does not exist|Could not establish connection|The message port closed before a response/;
+            storage.get({ pending_messages: [] }, (s) => {
+              const arr = s.pending_messages || [];
+              arr.push({
+                tabId: tabObj.id,
+                message,
+                time: Date.now(),
+                error: msg,
+                handshake: false,
+                benign: benignRe.test(msg)
+              });
+              storage.set({ pending_messages: arr });
+              persisted = true;
+            });
+          } else {
+            // schedule next attempt with backoff
+            setTimeout(tryOnce, baseDelay * attempt);
+          }
+        } else if (resp && resp.pong) {
+          replied = true;
+          sendMessageToTabObj(tabObj, message);
         } else {
-          console.warn('handshake failed:', msg, 'for tab', tabObj.id);
-          bgDebug('handshake unexpected error', msg, 'for tab', tabObj.id);
-          storage.get({ pending_messages: [] }, (s) => {
-            const arr = s.pending_messages || [];
-            arr.push({ tabId: tabObj.id, message, time: Date.now(), error: msg, handshake: false });
-            storage.set({ pending_messages: arr });
-            persisted = true;
-          });
+          // no error but also no pong; treat as a possible transient case
+          if (attempt >= maxAttempts) {
+            storage.get({ pending_messages: [] }, (s) => {
+              const arr = s.pending_messages || [];
+              arr.push({ tabId: tabObj.id, message, time: Date.now(), handshake: false });
+              storage.set({ pending_messages: arr });
+              persisted = true;
+            });
+          } else {
+            setTimeout(tryOnce, baseDelay * attempt);
+          }
         }
-      } else if (resp && resp.pong) {
-        replied = true;
-        sendMessageToTabObj(tabObj, message);
-      } else {
-        console.info('handshake no pong response, storing pending for tab', tabObj.id);
+      });
+    } catch (e) {
+      bgDebug('sendMessageWithHandshake tryOnce exception', e, 'attempt', attempt);
+      if (attempt >= maxAttempts) {
         storage.get({ pending_messages: [] }, (s) => {
           const arr = s.pending_messages || [];
-          arr.push({ tabId: tabObj.id, message, time: Date.now(), handshake: false });
+          arr.push({ tabId: tabObj.id, message, time: Date.now(), error: String(e) });
           storage.set({ pending_messages: arr });
           persisted = true;
         });
+      } else {
+        setTimeout(tryOnce, baseDelay * attempt);
       }
-    });
-  } catch (e) {
-    console.warn('sendMessageWithHandshake exception', e);
-    storage.get({ pending_messages: [] }, (s) => {
-      const arr = s.pending_messages || [];
-      arr.push({ tabId: tabObj.id, message, time: Date.now(), error: String(e) });
-      storage.set({ pending_messages: arr });
-      persisted = true;
-    });
+    }
   }
 
+  tryOnce();
+
+  // Overall timeout: ensure we persist if nothing succeeded within the timeout window
   setTimeout(() => {
     if (!replied && !persisted) {
-      console.warn('handshake timeout, persisting message for tab', tabObj.id);
+      bgDebug('handshake overall timeout, persisting message for tab', tabObj.id);
       storage.get({ pending_messages: [] }, (s) => {
         const arr = s.pending_messages || [];
         arr.push({ tabId: tabObj.id, message, time: Date.now(), handshake: 'timeout' });
         storage.set({ pending_messages: arr });
       });
     }
-  }, timeout);
+  }, timeout + (baseDelay * maxAttempts * 2));
 }
 
 function getTranslator() {
@@ -219,8 +244,12 @@ function initMqttIfEnabled() {
   try {
     // Prefer control broker settings (separate from LLM broker). Fall back to legacy mqtt_broker.
     storage.get({ mqtt_ctrl_broker: {}, mqtt_ctrl_enabled: false, mqtt_broker: {} }, (cfg) => {
-      const broker = cfg.mqtt_ctrl_broker && Object.keys(cfg.mqtt_ctrl_broker).length ? cfg.mqtt_ctrl_broker : (cfg.mqtt_broker || {});
-      const enabled = (typeof cfg.mqtt_ctrl_enabled !== 'undefined') ? cfg.mqtt_ctrl_enabled : (cfg.mqtt_enabled || false);
+      const broker = (cfg.mqtt_ctrl_broker && Object.keys(cfg.mqtt_ctrl_broker).length)
+        ? cfg.mqtt_ctrl_broker
+        : (cfg.mqtt_broker || {});
+      const enabled = (typeof cfg.mqtt_ctrl_enabled !== 'undefined')
+        ? cfg.mqtt_ctrl_enabled
+        : (cfg.mqtt_enabled || false);
       if (!broker || !broker.brokerUrl) broker.brokerUrl = broker.brokerUrl || 'ws://localhost:9001';
       bgDebug('initMqttIfEnabled read storage', { mqtt_ctrl_enabled: enabled, mqtt_ctrl_broker: broker });
       if (!enabled || !broker || !broker.brokerUrl) {
@@ -468,11 +497,14 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
     };
 
     // If the background receiver provided context in the request (from popup), attach it
-    try {
-      if (request && request.context && request.context.tokenId) {
-        envelope.payload.context = { tokenId: request.context.tokenId, uuid: request.context.uuid || (request.callback && request.callback.uuid) || null };
-      }
-    } catch (e) {}
+      try {
+        if (request && request.context && request.context.tokenId) {
+          envelope.payload.context = {
+            tokenId: request.context.tokenId,
+            uuid: request.context.uuid || (request.callback && request.callback.uuid) || null
+          };
+        }
+      } catch (e) {}
 
     // If caller included UI steps (popup), forward them to the AI payload and include
     // them in the canonical `input` field so the model receives the UI context inline.
@@ -514,7 +546,11 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
         const onMessage = (topic, message) => {
           if (topic !== subscribeTopic) return;
           let payload = null;
-          try { payload = JSON.parse(message.toString()); } catch (e) { payload = message.toString(); }
+          try {
+            payload = JSON.parse(message.toString());
+          } catch (e) {
+            payload = message.toString();
+          }
           bgDebug('chat reply received', payload);
 
           // Cleanup subscription and handler
@@ -523,7 +559,13 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
           if (timeoutId) clearTimeout(timeoutId);
 
           // Reply to the original sender via sendResponse
-          try { if (typeof sendResponse === 'function') sendResponse({ requestId, payload }); } catch (e) { bgDebug('sendResponse failed', e); }
+          try {
+            if (typeof sendResponse === 'function') {
+              sendResponse({ requestId, payload });
+            }
+          } catch (e) {
+            bgDebug('sendResponse failed', e);
+          }
         };
 
         client.on('message', onMessage);
@@ -545,7 +587,11 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
             }
             if (!callback) {
               let clientIdFromPrefix = null;
-              try { clientIdFromPrefix = (mqttPrefix && mqttPrefix.split && mqttPrefix.split('/').pop()) || null; } catch (e) { clientIdFromPrefix = null; }
+              try {
+                clientIdFromPrefix = (mqttPrefix && mqttPrefix.split && mqttPrefix.split('/').pop()) || null;
+              } catch (e) {
+                clientIdFromPrefix = null;
+              }
               let uuid = null;
               if (clientIdFromPrefix) {
                 const parts = String(clientIdFromPrefix).split('-');
@@ -640,22 +686,54 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
       const ttype = request.test_type || 'functional';
       const allowed = (policy.allowed_actions || []).includes(cmd.action);
       const modeForType = (policy.per_test_type && policy.per_test_type[ttype]) || policy.mode || 'suggestion';
-      if (modeForType === 'automatic' && allowed) {
-        content.query(tab, (tabs) => { if (tabs && tabs[0]) content.sendMessage(tabs[0].id, { operation: 'execute', command: cmd }); });
-        const ack = { status: 'executed', id: cmd.id || null, time: Date.now(), command: cmd };
-        storage.get({ actions_log: [] }, (s2) => { const log = s2.actions_log || []; log.push(ack); storage.set({ actions_log: log }); });
-      } else {
-        storage.get({ suggestions: [] }, (s) => { const suggestions = s.suggestions || []; suggestions.push({ id: request.id || `sugg-${Date.now()}`, time: Date.now(), request }); storage.set({ suggestions }); });
-      }
+        if (modeForType === 'automatic' && allowed) {
+          content.query(tab, (tabs) => {
+            if (tabs && tabs[0]) {
+              content.sendMessage(tabs[0].id, { operation: 'execute', command: cmd });
+            }
+          });
+          const ack = {
+            status: 'executed',
+            id: cmd.id || null,
+            time: Date.now(),
+            command: cmd
+          };
+          storage.get({ actions_log: [] }, (s2) => {
+            const log = s2.actions_log || [];
+            log.push(ack);
+            storage.set({ actions_log: log });
+          });
+        } else {
+          storage.get({ suggestions: [] }, (s) => {
+            const suggestions = s.suggestions || [];
+            suggestions.push({ id: request.id || `sugg-${Date.now()}`, time: Date.now(), request });
+            storage.set({ suggestions });
+          });
+        }
     });
   }
   else if (operation === 'mqtt_status') {
     // return useful diagnostics for debugging MQTT (include control and LLM configs)
     try {
-      storage.get({ mqtt_ctrl_enabled: false, mqtt_ctrl_broker: {}, mqtt_llm_enabled: false, mqtt_llm_broker: {}, mqtt_enabled: false, mqtt_broker: {} }, (cfg) => {
-        const ctrlBroker = (cfg.mqtt_ctrl_broker && Object.keys(cfg.mqtt_ctrl_broker).length) ? cfg.mqtt_ctrl_broker : (cfg.mqtt_broker || {});
-        const ctrlEnabled = (typeof cfg.mqtt_ctrl_enabled !== 'undefined') ? !!cfg.mqtt_ctrl_enabled : !!cfg.mqtt_enabled;
-        const llmBroker = (cfg.mqtt_llm_broker && Object.keys(cfg.mqtt_llm_broker).length) ? cfg.mqtt_llm_broker : {};
+      storage.get(
+        {
+          mqtt_ctrl_enabled: false,
+          mqtt_ctrl_broker: {},
+          mqtt_llm_enabled: false,
+          mqtt_llm_broker: {},
+          mqtt_enabled: false,
+          mqtt_broker: {}
+        },
+        (cfg) => {
+          const ctrlBroker = (cfg.mqtt_ctrl_broker && Object.keys(cfg.mqtt_ctrl_broker).length)
+            ? cfg.mqtt_ctrl_broker
+            : (cfg.mqtt_broker || {});
+          const ctrlEnabled = (typeof cfg.mqtt_ctrl_enabled !== 'undefined')
+            ? !!cfg.mqtt_ctrl_enabled
+            : !!cfg.mqtt_enabled;
+          const llmBroker = (cfg.mqtt_llm_broker && Object.keys(cfg.mqtt_llm_broker).length)
+            ? cfg.mqtt_llm_broker
+            : {};
         const llmEnabled = !!cfg.mqtt_llm_enabled;
 
         const bridgePresent = (typeof MqttBridge !== 'undefined');

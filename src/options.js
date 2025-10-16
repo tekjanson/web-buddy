@@ -5,8 +5,17 @@ const storage = host.storage.local;
 
 function update() {
   const values = document.getElementById('custom-locators').value;
-  const array = values ? values.split(',') : ['for', 'name', 'id', 'title', 'href', 'class'];
+  const array = values ? values.split(',').map(s => s.trim()).filter(Boolean) : ['for', 'name', 'id', 'title', 'href', 'class'];
   storage.set({ locators: array });
+}
+
+function resetLocators() {
+  const defaults = ['for', 'name', 'id', 'title', 'href', 'class'];
+  document.getElementById('custom-locators').value = defaults.join(',');
+  storage.set({ locators: defaults });
+  const el = document.getElementById('hint');
+  if (el) el.textContent = 'Reset to defaults';
+  setTimeout(() => { if (el) el.textContent = 'Add your own flavoured locators! Separate with a commas.'; }, 1500);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -31,9 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // load output translator selection
-  storage.get({ output_translator: 'robot' }, (state) => {
+  // default to Cypress which is the UX default in the UI
+  storage.get({ output_translator: 'cypress' }, (state) => {
     const sel = document.getElementById('output-translator');
-    if (sel) sel.value = state.output_translator || 'robot';
+    if (sel) sel.value = state.output_translator || 'cypress';
   });
 
   const outputSel = document.getElementById('output-translator');
@@ -42,6 +52,27 @@ document.addEventListener('DOMContentLoaded', () => {
       storage.set({ output_translator: outputSel.value || 'robot' });
     });
   }
+
+  // Wire reset button
+  const resetBtn = document.getElementById('reset');
+  if (resetBtn) resetBtn.addEventListener('click', resetLocators);
+
+  // Keyboard: allow Enter key in inputs to trigger nearby save/update actions
+  const enterHandler = (ev) => {
+    if (ev.key === 'Enter') {
+      const tgt = ev.target && ev.target.id;
+      if (tgt === 'per-test-type' || tgt === 'allowed-actions' || tgt === 'mode') {
+        document.getElementById('save-policy').click();
+      } else if (tgt && tgt.startsWith('llm-')) {
+        document.getElementById('save-llm-broker').click();
+      } else if (tgt && (tgt === 'broker-url' || tgt === 'client-id' || tgt === 'username' || tgt === 'password')) {
+        document.getElementById('save-broker').click();
+      } else if (tgt === 'custom-locators') {
+        document.getElementById('update').click();
+      }
+    }
+  };
+  document.querySelectorAll('input, select').forEach((el) => el.addEventListener('keydown', enterHandler));
 
   document.getElementById('save-policy').addEventListener('click', () => {
     const mode = document.getElementById('mode').value;
