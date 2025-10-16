@@ -9,34 +9,105 @@ if (typeof window.$host === 'undefined') {
   window.$host = (typeof host !== 'undefined') ? host : (typeof chrome !== 'undefined' ? chrome : (typeof browser !== 'undefined' ? browser : {}));
 }
 // Provide a safe storage fallback (minimal stub) to avoid runtime errors in non-browser test envs.
-const storage = (window.$host && window.$host.storage && window.$host.storage.local) ? window.$host.storage.local : {
-  get: (keys, cb) => { try { if (typeof cb === 'function') cb({}); } catch (e) {} },
-  set: () => {},
-  onChanged: { addListener: () => {} }
-};
+const storage = (window.$host && window.$host.storage && window.$host.storage.local)
+  ? window.$host.storage.local
+  : {
+    get: (keys, cb) => {
+      try {
+        if (typeof cb === 'function') cb({});
+      } catch (e) {}
+    },
+    set: () => {},
+    onChanged: { addListener: () => {} }
+  };
 
 // Delegate common helpers to popup-helpers.js via window.popupHelpers when available.
 // This keeps popup.js focused on the main popup logic while remaining backwards compatible.
-const logger = (data) => { try { if (window.popupHelpers && window.popupHelpers.logger) return window.popupHelpers.logger(data); } catch (e) {} };
-const analytics = (...args) => { try { if (window.popupHelpers && window.popupHelpers.analytics) return window.popupHelpers.analytics(...args); } catch (e) {} };
-const renderChatMessage = (who, text) => { try { if (window.popupHelpers && window.popupHelpers.renderChatMessage) return window.popupHelpers.renderChatMessage(who, text); } catch (e) {} };
-const display = (message) => { try { if (window.popupHelpers && window.popupHelpers.display) return window.popupHelpers.display(message); } catch (e) {} };
-const show = (array, visible) => { try { if (window.popupHelpers && window.popupHelpers.show) return window.popupHelpers.show(array, visible); } catch (e) {} };
-const enable = (array, isEnabled) => { try { if (window.popupHelpers && window.popupHelpers.enable) return window.popupHelpers.enable(array, isEnabled); } catch (e) {} };
-const toggle = (e) => { try { if (window.popupHelpers && window.popupHelpers.toggle) return window.popupHelpers.toggle(e); } catch (err) {} };
-const busy = (e) => { try { if (window.popupHelpers && window.popupHelpers.busy) return window.popupHelpers.busy(e); } catch (err) {} };
-const updateScanButton = (isPageContextMode) => { try { if (window.popupHelpers && window.popupHelpers.updateScanButton) return window.popupHelpers.updateScanButton(isPageContextMode); } catch (err) {} };
+const logger = (data) => {
+  try {
+    if (window.popupHelpers && window.popupHelpers.logger) {
+      return window.popupHelpers.logger(data);
+    }
+  } catch (e) {}
+};
+
+const analytics = (...args) => {
+  try {
+    if (window.popupHelpers && window.popupHelpers.analytics) {
+      return window.popupHelpers.analytics(...args);
+    }
+  } catch (e) {}
+};
+
+const renderChatMessage = (who, text) => {
+  try {
+    if (window.popupHelpers && window.popupHelpers.renderChatMessage) {
+      return window.popupHelpers.renderChatMessage(who, text);
+    }
+  } catch (e) {}
+};
+
+const display = (message) => {
+  try {
+    if (window.popupHelpers && window.popupHelpers.display) {
+      return window.popupHelpers.display(message);
+    }
+  } catch (e) {}
+};
+
+const show = (array, visible) => {
+  try {
+    if (window.popupHelpers && window.popupHelpers.show) {
+      return window.popupHelpers.show(array, visible);
+    }
+  } catch (e) {}
+};
+
+const enable = (array, isEnabled) => {
+  try {
+    if (window.popupHelpers && window.popupHelpers.enable) {
+      return window.popupHelpers.enable(array, isEnabled);
+    }
+  } catch (e) {}
+};
+
+const toggle = (e) => {
+  try {
+    if (window.popupHelpers && window.popupHelpers.toggle) {
+      return window.popupHelpers.toggle(e);
+    }
+  } catch (err) {}
+};
+
+const busy = (e) => {
+  try {
+    if (window.popupHelpers && window.popupHelpers.busy) {
+      return window.popupHelpers.busy(e);
+    }
+  } catch (err) {}
+};
+
+const updateScanButton = (isPageContextMode) => {
+  try {
+    if (window.popupHelpers && window.popupHelpers.updateScanButton) {
+      return window.popupHelpers.updateScanButton(isPageContextMode);
+    }
+  } catch (err) {}
+};
 
 // busy and updateScanButton are provided by popup-helpers and delegated via wrappers above.
 function operation(e) {
-    if (e.target.id === 'pom') {
+  const actionId = (e && e.currentTarget && e.currentTarget.id)
+    || (e && e.target && e.target.id)
+    || null;
+  if (actionId === 'pom') {
     // Open the options page instead of legacy background helper (MV2 UI removed)
     try { $host.runtime.openOptionsPage(); } catch (err) { $host.tabs.create({ url: $host.runtime.getURL('src/options.html') }); }
     return;
   }
 
   // The new scan logic is handled client-side in the popup, so we don't send a message to background.
-  if (e.target.id === 'scan') {
+  if (actionId === 'scan') {
     const scanBtn = document.getElementById('scan');
     const originalText = scanBtn.textContent;
     const scriptToInject = 'src/content.js';
@@ -80,16 +151,26 @@ function operation(e) {
       };
 
       if ($host.scripting && $host.scripting.executeScript) {
-        $host.scripting.executeScript({ target: { tabId }, files: [scriptToInject] }, injectionCallback);
+        $host.scripting.executeScript(
+          { target: { tabId }, files: [scriptToInject] },
+          injectionCallback
+        );
       } else {
-        $host.tabs.executeScript(tabId, { file: scriptToInject }, injectionCallback);
+        $host.tabs.executeScript(
+          tabId,
+          { file: scriptToInject },
+          injectionCallback
+        );
       }
     });
     return;
   }
+  // Ensure popup UI updates (show/hide record/resume/stop buttons)
+  try { toggle(e); } catch (err) { /* ignore toggle errors */ }
 
-  toggle(e);
+  // Capture current locators ordering from the settings UI
   const locators = $('#sortable').sortable('toArray', { attribute: 'id' });
+
   // Use a safe wrapper to avoid "The message port closed before a response was received." when
   // the background doesn't call sendResponse (MV3 service worker may terminate early).
   function safeSendMessage(message, cb) {
@@ -113,9 +194,30 @@ function operation(e) {
     }
   }
 
-  safeSendMessage({ operation: e.target.id, locators }, display);
+  // For record we prefer an explicit send so we can handle runtime.lastError and update UI immediately
+  // For record we prefer an explicit send so we can handle runtime.lastError and update UI immediately
+  if (actionId === 'record') {
+    try {
+      $host.runtime.sendMessage({ operation: 'record', locators }, (resp) => {
+        const lastErr = $host.runtime && $host.runtime.lastError;
+        if (lastErr) {
+          if (typeof rcLog !== 'undefined') rcLog('error', 'record sendMessage failed', lastErr.message);
+          try { display({ message: `Record failed: ${lastErr.message}` }); } catch (e) {}
+        } else {
+          try { display({ message: 'Recording started' }); } catch (e) {}
+        }
+      });
+    } catch (e) {
+      if (typeof rcLog !== 'undefined') rcLog('error', 'record sendMessage exception', e && e.message ? e.message : e);
+      try { display({ message: 'Record request failed' }); } catch (ee) {}
+    }
+  } else {
+    safeSendMessage({ operation: actionId, locators }, display);
+  }
+  // If the user clicked the 'record' button, proactively inject content script into the target tab
+  // Background will handle content script injection and attach listeners for recording.
 
-  analytics(['_trackEvent', e.target.id, '^-^']);
+  analytics(['_trackEvent', actionId || 'unknown', '^-^']);
 }
 // some of the button stuff is here
 function settings(e) {
@@ -169,6 +271,18 @@ function like() {
 document.addEventListener(
   'DOMContentLoaded',
   () => {
+    // Remember the originating tab for pinned popups so the popup stays associated
+    try {
+      if (window.getTargetTab) {
+        getTargetTab((t) => {
+          try {
+            if (t && t.id) {
+              window._wb_popup_associated_tab = { id: t.id, url: t.url };
+            }
+          } catch (e) {}
+        });
+      }
+    } catch (e) { /* ignore */ }
     // AI provider badge: show which provider is active (mqtt or gemini)
     function updateAiProviderBadge(provider) {
       try {
@@ -235,7 +349,11 @@ document.addEventListener(
     }
 
     // Load initial share_ui_steps value
-    try { storage.get({ share_ui_steps: false }, (s) => updateShareStepsBadge(!!(s && s.share_ui_steps))); } catch (e) {}
+    try {
+      storage.get({ share_ui_steps: false }, (s) =>
+        updateShareStepsBadge(!!(s && s.share_ui_steps))
+      );
+    } catch (e) {}
 
     // Make badge clickable to toggle sharing
     try {
@@ -256,7 +374,54 @@ document.addEventListener(
     } catch (e) {}
 
     // Update share badge live when storage changes
-    $host.storage.onChanged.addListener((changes) => { if (changes.share_ui_steps) updateShareStepsBadge(changes.share_ui_steps.newValue); });
+    $host.storage.onChanged.addListener((changes) => {
+      if (changes.share_ui_steps) {
+        updateShareStepsBadge(changes.share_ui_steps.newValue);
+      }
+    });
+
+    // Add a lightweight diagnostics button and panel for quick debugging
+    try {
+      const diagBtn = document.createElement('button');
+      diagBtn.id = 'show-diagnostics';
+      diagBtn.textContent = 'Show Diagnostics';
+      diagBtn.style.margin = '6px';
+      diagBtn.addEventListener('click', () => {
+        try {
+          storage.get(
+            {
+              pending_commands: {},
+              last_actions: [],
+              attached_tabs: [],
+              recent_messages: []
+            },
+            (s) => {
+              let out = '';
+            try { out += 'pending_commands:\n' + JSON.stringify(s.pending_commands || {}, null, 2) + '\n\n'; } catch (e) { out += 'pending_commands: (error)\n'; }
+            try { out += 'last_actions:\n' + JSON.stringify(s.last_actions || [], null, 2) + '\n\n'; } catch (e) { out += 'last_actions: (error)\n'; }
+            try { out += 'attached_tabs:\n' + JSON.stringify(s.attached_tabs || [], null, 2) + '\n\n'; } catch (e) { out += 'attached_tabs: (error)\n'; }
+            try { out += 'recent_messages (last 10):\n' + JSON.stringify((s.recent_messages || []).slice(-10), null, 2) + '\n'; } catch (e) { out += 'recent_messages: (error)\n'; }
+            let panel = document.getElementById('diagnostics-panel');
+            if (!panel) {
+              panel = document.createElement('pre');
+              panel.id = 'diagnostics-panel';
+              panel.style.maxHeight = '260px';
+              panel.style.overflow = 'auto';
+              panel.style.background = '#111';
+              panel.style.color = '#eee';
+              panel.style.padding = '8px';
+              panel.style.margin = '8px 6px';
+              panel.style.fontSize = '12px';
+              const container = document.getElementById('keywordDiv') || document.body;
+              container.appendChild(panel);
+            }
+            panel.textContent = out;
+          });
+        } catch (e) { display({ message: `Diagnostics failed: ${e && e.message ? e.message : e}` }); }
+      });
+      const container = document.getElementById('keywordDiv') || document.body;
+      container.appendChild(diagBtn);
+    } catch (e) { /* ignore diag UI errors */ }
 
     // chrome.storage.local.get(/* String or Array */ ["pom"], function (items) {
     //   //  items = [ { "phasersTo": "awesome" } ]
@@ -433,7 +598,9 @@ document.addEventListener(
     // Show mqtt status (enabled/disabled + broker url)
     try {
       storage.get({ mqtt_ctrl_enabled: false, mqtt_ctrl_broker: {}, mqtt_broker: {} }, (s) => {
-        const broker = (s.mqtt_ctrl_broker && Object.keys(s.mqtt_ctrl_broker).length) ? s.mqtt_ctrl_broker : (s.mqtt_broker || {});
+        const broker = (s.mqtt_ctrl_broker && Object.keys(s.mqtt_ctrl_broker).length)
+          ? s.mqtt_ctrl_broker
+          : (s.mqtt_broker || {});
         const st = (typeof s.mqtt_ctrl_enabled !== 'undefined') ? (s.mqtt_ctrl_enabled ? 'enabled' : 'disabled') : (s.mqtt_enabled ? 'enabled' : 'disabled');
         const url = (broker && broker.brokerUrl) ? broker.brokerUrl : 'ws://localhost:9001';
         const el = document.getElementById('mqtt-status');

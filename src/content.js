@@ -24,10 +24,30 @@ function debugLog(...args) { try { if (typeof rcLog !== 'undefined') rcLog('debu
 
 function isChangeType(type) { return ['text', 'file', 'select'].includes(type); }
 
+function looksLikeNavigation(node) {
+  try {
+    if (!node || !node.tagName) return false;
+    const tag = node.tagName.toLowerCase();
+    if (tag === 'a' && node.getAttribute('href')) return true;
+    if (tag === 'button' && String(node.getAttribute('type') || '').toLowerCase() === 'submit') return true;
+    if (node.closest && node.closest('a')) return true;
+  } catch (e) {}
+  return false;
+}
+
 function sendAction(scriptOrScripts) {
-  const payload = { operation: 'action', ...(Array.isArray(scriptOrScripts) ? { scripts: scriptOrScripts } : { script: scriptOrScripts }) };
+  const payload = {
+    operation: 'action',
+    ...(Array.isArray(scriptOrScripts) ? { scripts: scriptOrScripts } : { script: scriptOrScripts })
+  };
   debugLog('sending action payload', payload);
-  try { host.runtime.sendMessage(payload, (resp) => { const lastErr = host.runtime && host.runtime.lastError; if (lastErr) debugLog('sendAction lastError', lastErr && lastErr.message ? lastErr.message : lastErr); else debugLog('sendAction delivered', resp); }); } catch (e) { debugLog('sendAction exception', e); }
+  try {
+    host.runtime.sendMessage(payload, (resp) => {
+      const lastErr = host.runtime && host.runtime.lastError;
+      if (lastErr) debugLog('sendAction lastError', lastErr && lastErr.message ? lastErr.message : lastErr);
+      else debugLog('sendAction delivered', resp);
+    });
+  } catch (e) { debugLog('sendAction exception', e); }
 }
 
 function recordChange(e) {
@@ -112,11 +132,31 @@ function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 2
               const s = String(xpath || '');
               let el = null;
               if (s.indexOf('//') === 0 || s.toLowerCase().indexOf('xpath:') === 0) {
-                try { el = document.evaluate(s.replace(/^xpath:\s*/i, ''), document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; } catch (e) { debugLog('waitForElement xpath eval error', e); }
+                try {
+                  el = document.evaluate(
+                    s.replace(/^xpath:\s*/i, ''),
+                    document,
+                    null,
+                    XPathResult.FIRST_ORDERED_NODE_TYPE,
+                    null
+                  ).singleNodeValue;
+                } catch (e) {
+                  debugLog('waitForElement xpath eval error', e);
+                }
               } else {
-                try { el = document.querySelector(s); } catch (e) { /* invalid css */ }
+                try {
+                  el = document.querySelector(s);
+                } catch (e) { /* invalid css */ }
                 if (!el) {
-                  try { el = document.evaluate(s, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; } catch (e) { /* swallow */ }
+                  try {
+                    el = document.evaluate(
+                      s,
+                      document,
+                      null,
+                      XPathResult.FIRST_ORDERED_NODE_TYPE,
+                      null
+                    ).singleNodeValue;
+                  } catch (e) { /* swallow */ }
                 }
               }
               if (el) { debugLog('waitForElement found element by selector', s, 'after', attempts, 'attempts'); clearInterval(timer); return resolve(el); }
@@ -151,7 +191,13 @@ function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 2
                 try {
                   const txt = (node.textContent || '').trim();
                   if (!txt) continue;
-                  if (txt.indexOf(String(textFallback).trim()) !== -1 || String(txt).toLowerCase().indexOf(String(textFallback).toLowerCase()) !== -1) { candidates.push({ element: node, text: txt }); }
+                  const plainMatch = txt.indexOf(String(textFallback).trim()) !== -1;
+                  const lowerMatch = String(txt)
+                    .toLowerCase()
+                    .indexOf(String(textFallback).toLowerCase()) !== -1;
+                  if (plainMatch || lowerMatch) {
+                    candidates.push({ element: node, text: txt });
+                  }
                 } catch (ee) { }
               }
               function getXPathForElement(el) {
@@ -160,7 +206,10 @@ function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 2
                 while (el && el.nodeType === 1) {
                   let nb = 0;
                   let sib = el.previousSibling;
-                  while (sib) { if (sib.nodeType === 1 && sib.nodeName === el.nodeName) nb += 1; sib = sib.previousSibling; }
+                  while (sib) {
+                    if (sib.nodeType === 1 && sib.nodeName === el.nodeName) nb += 1;
+                    sib = sib.previousSibling;
+                  }
                   const idx = nb ? `[${nb + 1}]` : '';
                   parts.unshift(el.nodeName.toLowerCase() + idx);
                   el = el.parentNode;
@@ -168,10 +217,24 @@ function waitForElement(xpath, textFallback = null, timeout = 8000, interval = 2
                 }
                 return parts.length ? '//' + parts.join('/') : null;
               }
-              const suggestionPayload = (candidates.length ? candidates.slice(0, 5).map(c => ({ xpath: getXPathForElement(c.element), text: c.text })) : []);
+              const suggestionPayload = (candidates.length
+                ? candidates.slice(0, 5).map(c => ({
+                  xpath: getXPathForElement(c.element),
+                  text: c.text
+                }))
+                : []);
               debugLog('waitForElement suggestions', suggestionPayload);
-              try { window.__web_buddy_last_selector_suggestions = suggestionPayload; } catch (e) { /* ignore */ }
-              try { host.runtime.sendMessage({ operation: 'selector_suggestions', original: xpath, textFallback, suggestions: suggestionPayload }); } catch (e) { debugLog('failed to send selector_suggestions', e); }
+              try {
+                window.__web_buddy_last_selector_suggestions = suggestionPayload;
+              } catch (e) { /* ignore */ }
+              try {
+                host.runtime.sendMessage({
+                  operation: 'selector_suggestions',
+                  original: xpath,
+                  textFallback,
+                  suggestions: suggestionPayload
+                });
+              } catch (e) { debugLog('failed to send selector_suggestions', e); }
             } catch (e) { debugLog('waitForElement suggestion building failed', e); }
           }
           return resolve(null);
@@ -187,7 +250,10 @@ function quickFind(selector, textFallback) {
     if (selector && typeof selector === 'string') {
       const s = selector;
       // try CSS
-      try { const el = document.querySelector(s); if (el) return el; } catch (e) { /* ignore invalid css */ }
+      try {
+        const el = document.querySelector(s);
+        if (el) return el;
+      } catch (e) { /* ignore invalid css */ }
       // try XPath
       try { const xe = document.evaluate(s.replace(/^xpath:\s*/i, ''), document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; if (xe) return xe; } catch (e) { /* ignore */ }
     }
@@ -218,17 +284,26 @@ const handlers = [];
 // Mat-select handler with virtual-scroll support
 handlers.push({
   name: 'matSelectHandler',
-  match: (cmd) => { try { const sel = String(cmd.selector || ''); return sel.indexOf('mat-select') !== -1 || sel.indexOf('mat-option') !== -1 || (/mat-option/i).test(sel) || (!!cmd.value && sel.indexOf('mat') !== -1); } catch (e) { return false; } },
+  match: (cmd) => {
+    try {
+      const sel = String(cmd.selector || '');
+      return sel.indexOf('mat-select') !== -1 || sel.indexOf('mat-option') !== -1 || (/mat-option/i).test(sel) || (!!cmd.value && sel.indexOf('mat') !== -1);
+    } catch (e) { return false; }
+  },
   handle: async (cmd) => {
     try {
       debugLog('matSelectHandler: handling', cmd.selector, cmd.value);
-      const trigger = await waitForElement(cmd.selector || '', null, 3000, 200) || document.querySelector('[id^="mat-select"]') || document.querySelector('.mat-select-trigger');
+      const trigger = await waitForElement(cmd.selector || '', null, 3000, 200)
+        || document.querySelector('[id^="mat-select"]')
+        || document.querySelector('.mat-select-trigger');
       if (!trigger) { debugLog('matSelectHandler: trigger not found'); return false; }
       try { trigger.click(); } catch (e) { try { trigger.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('matSelectHandler: trigger click failed', ee); } }
 
       const panelSelectorCandidates = ['.mat-select-panel', 'body .mat-select-panel', '.cdk-overlay-pane'];
-      let option = null; const start = Date.now(); const timeout = 3000;
-      while (Date.now() - start < timeout) {
+  let option = null;
+  const start = Date.now();
+  const timeout = 3000;
+  while (Date.now() - start < timeout) {
         // quick find in overlays
         option = quickFind(null, String(cmd.value || '')) || null;
         if (option) break;
@@ -240,7 +315,8 @@ handlers.push({
           option = panelOpts.find(o => (o.textContent || '').trim().indexOf(String(cmd.value || '').trim()) !== -1) || null; if (option) break;
           try { const prev = panel.scrollTop || 0; panel.scrollTop = prev + (panel.clientHeight || 200); debugLog('matSelectHandler: scrolled panel to', panel.scrollTop); } catch (e) { }
         }
-        if (option) break; await new Promise(r => setTimeout(r, 120));
+  if (option) break;
+  await new Promise(r => setTimeout(r, 120));
       }
       if (!option) { debugLog('matSelectHandler: option not found for', cmd.value); return false; }
       try { option.click(); } catch (e) { try { option.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('matSelectHandler: option click failed', ee); } }
@@ -262,6 +338,18 @@ handlers.push({
       // short wait window before longer polling
       const el = await waitForElement(cmd.selector || '', cmd.value || null, 1200, 120);
       if (el) { try { el.click(); } catch (e) { try { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('defaultClickHandler click failed', ee); } } return true; }
+          // If we reached here and will attempt to click an element that may navigate,
+          // persist remaining commands so they can be replayed after navigation.
+          function looksLikeNavigation(node) {
+            try {
+              if (!node || !node.tagName) return false;
+              const tag = node.tagName.toLowerCase();
+              if (tag === 'a' && node.getAttribute('href')) return true;
+              if (tag === 'button' && String(node.getAttribute('type') || '').toLowerCase() === 'submit') return true;
+              if (node.closest && node.closest('a')) return true;
+            } catch (e) { }
+            return false;
+          }
       return false;
     } catch (e) { debugLog('defaultClickHandler error', e); return false; }
   }
@@ -285,6 +373,13 @@ function executeCommands(cmds) {
         try {
           debugLog('executing command', i, c.action, 'attempt', attempts, 'selector', c.selector, 'value', c.value, 'timeout', timeout);
           if (c.action === 'navigate') {
+            // Persist remaining commands before navigation so background can resume them after load
+            try {
+              const remaining = Array.isArray(cmds) ? cmds.slice(i + 1) : [];
+              if (remaining && remaining.length) {
+                try { host.runtime.sendMessage({ operation: 'persist_commands', commands: remaining }); } catch (pe) { debugLog('persist before navigate failed', pe); }
+              }
+            } catch (e) { debugLog('failed to compute remaining commands before navigate', e); }
             window.location.href = c.value || c.url || '';
             success = true;
             await new Promise(r => setTimeout(r, 600));
@@ -305,7 +400,14 @@ function executeCommands(cmds) {
               if (!success) {
                 // quick immediate probe
                 const quick = quickFind(c.selector || '', c.textFallback || c.value || null);
-                if (quick) { try { quick.click(); } catch (e) { try { quick.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('quick click dispatch failed', ee); } } success = true; }
+                if (quick) {
+                  try {
+                    // persist remaining commands if this click may navigate
+                    try { if (looksLikeNavigation(quick)) { host.runtime.sendMessage({ operation: 'persist_commands', commands: cmds.slice(i + 1) }); } } catch (pe) { debugLog('persist before quick click failed', pe); }
+                    quick.click();
+                  } catch (e) { try { quick.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('quick click dispatch failed', ee); } }
+                  success = true;
+                }
                 else {
                   // try cached suggestions first (fast)
                   try {
@@ -315,8 +417,22 @@ function executeCommands(cmds) {
                         const xp = sugg[s].xpath;
                         if (!xp) continue;
                         let el2 = null;
-                        try { el2 = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; } catch (e) { }
-                        if (el2) { try { el2.click(); } catch (e) { try { el2.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('suggestion click failed', ee); } } success = true; break; }
+                        try {
+                          el2 = document.evaluate(
+                            xp,
+                            document,
+                            null,
+                            XPathResult.FIRST_ORDERED_NODE_TYPE,
+                            null
+                          ).singleNodeValue;
+                        } catch (e) { }
+                        if (el2) {
+                          try {
+                            try { if (looksLikeNavigation(el2)) { host.runtime.sendMessage({ operation: 'persist_commands', commands: cmds.slice(i + 1) }); } } catch (pe) { debugLog('persist before suggestion click failed', pe); }
+                            el2.click();
+                          } catch (e) { try { el2.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('suggestion click failed', ee); } }
+                          success = true; break;
+                        }
                       } catch (se) { debugLog('suggestion attempt error', se); }
                     }
                   } catch (se) { debugLog('suggestion consumption failed', se); }
@@ -324,11 +440,25 @@ function executeCommands(cmds) {
                   // finally fall back to a longer wait (use per-command timeout)
                   if (!success) {
                     const el = await waitForElement(c.selector || '', c.textFallback || c.value || null, timeout, 200);
-                    if (el) { try { el.click(); } catch (e) { try { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('click dispatch failed', ee); } } success = true; }
+                    if (el) {
+                      try {
+                        try { if (looksLikeNavigation(el)) { host.runtime.sendMessage({ operation: 'persist_commands', commands: cmds.slice(i + 1) }); } } catch (pe) { debugLog('persist before waitForElement click failed', pe); }
+                        el.click();
+                      } catch (e) { try { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (ee) { debugLog('click dispatch failed', ee); } }
+                      success = true;
+                    }
                   }
                 }
               }
           } else if (c.action === 'input') {
+            // If we're about to interact with an element that seems likely to navigate,
+            // persist the remaining commands so the background can replay them after load.
+            try {
+              if (typeof looksLikeNavigation === 'function') {
+                // No-op here; looksLikeNavigation defined in click handler scope.
+              }
+            } catch (e) {}
+          } else if (c.action === 'select') {
             const el = await waitForElement(c.selector || '', c.value || null, timeout, 200);
             if (el) { el.focus(); el.value = c.value || ''; el.dispatchEvent(new Event('input', { bubbles: true })); success = true; }
           } else if (c.action === 'select') {
@@ -344,7 +474,14 @@ function executeCommands(cmds) {
         } catch (e) { debugLog('command execution error', e && e.message ? e.message : e); }
         if (!success && attempts < maxAttempts) { debugLog('retrying command', i, c.action, 'next attempt in 200ms'); await new Promise(r => setTimeout(r, 200)); }
       }
-      results.push({ index: i, action: c.action, success, attempts, selector: c.selector, value: c.value });
+      results.push({
+        index: i,
+        action: c.action,
+        success,
+        attempts,
+        selector: c.selector,
+        value: c.value
+      });
       if (!success) debugLog('command failed after attempts', i, c.action, attempts);
       if (c.action === 'navigate') break;
     }
@@ -411,6 +548,139 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const prunedHtml = getPrunedDom();
     sendResponse({ html: prunedHtml });
     return true; // Indicate async response
+  } else if (request.operation === 'get_dom_summary') {
+    // Return a structured summary of the page to help AI understand the context
+    try {
+      const summary = {};
+      try { summary.url = window.location.href; } catch (e) { summary.url = null; }
+      try { summary.title = document.title || null; } catch (e) { summary.title = null; }
+      try { const md = document.querySelector('meta[name="description"]') || document.querySelector('meta[property="og:description"]'); summary.metaDescription = md ? (md.getAttribute('content') || null) : null; } catch (e) { summary.metaDescription = null; }
+      try {
+        const headings = Array.from(document.querySelectorAll('h1, h2, h3')).slice(0, 10).map(h => ({ tag: h.tagName.toLowerCase(), text: (h.textContent || '').trim() }));
+        summary.headings = headings;
+      } catch (e) { summary.headings = []; }
+      try {
+        const forms = Array.from(document.querySelectorAll('form')).slice(0, 8).map(f => {
+          const inputs = Array.from(f.querySelectorAll('input, textarea, select, button')).map(i => ({ tag: i.tagName.toLowerCase(), type: i.type || null, name: i.name || null, id: i.id || null, placeholder: i.placeholder || null }));
+          return { id: f.id || null, name: f.name || null, action: f.action || null, inputs };
+        });
+        summary.forms = forms;
+      } catch (e) { summary.forms = []; }
+      try {
+        const links = Array.from(document.querySelectorAll('a[href]')).slice(0, 20).map(a => ({ href: a.href, text: (a.textContent || '').trim() }));
+        summary.links = links;
+      } catch (e) { summary.links = []; }
+      try {
+        // capture some visible text snippets from the body for quick context
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+        const snippets = [];
+        while (walker.nextNode() && snippets.length < 20) {
+          const t = (walker.currentNode.nodeValue || '').trim();
+          if (t.length > 20 && t.length < 400) snippets.push(t.slice(0, 300));
+        }
+        summary.visibleText = snippets;
+      } catch (e) { summary.visibleText = []; }
+
+      try { sendResponse({ summary }); } catch (e) { sendResponse({ summary: null }); }
+    } catch (e) { try { sendResponse({ summary: null }); } catch (ee) {} }
+    return true;
+  } else if (request.operation === 'highlight') {
+    try {
+      const sel = request.selector || null;
+      const type = request.selector_type || 'css';
+      const textFallback = request.textFallback || null;
+      let el = null;
+      try {
+        if (sel && type === 'css') el = document.querySelector(sel);
+        if (!el && sel && (type === 'xpath' || String(sel).indexOf('//') === 0)) {
+          try { el = document.evaluate(sel.replace(/^xpath:\s*/i, ''), document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; } catch (e) {}
+        }
+      } catch (e) { el = null; }
+      if (!el && textFallback) {
+        el = quickFind(null, textFallback) || null;
+      }
+      try { const prev = document.getElementById('__wb_highlight_overlay'); if (prev) prev.remove(); } catch (e) {}
+      if (el) {
+        try {
+          const rect = el.getBoundingClientRect();
+          const overlay = document.createElement('div'); overlay.id = '__wb_highlight_overlay';
+          overlay.style.position = 'absolute'; overlay.style.zIndex = 2147483647; overlay.style.pointerEvents = 'none';
+          overlay.style.border = '3px solid #f59e0b'; overlay.style.background = 'rgba(245,158,11,0.08)';
+          overlay.style.left = (rect.left + window.scrollX) + 'px'; overlay.style.top = (rect.top + window.scrollY) + 'px';
+          overlay.style.width = Math.max(2, rect.width) + 'px'; overlay.style.height = Math.max(2, rect.height) + 'px';
+          document.documentElement.appendChild(overlay);
+          try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { el.scrollIntoView(); }
+          setTimeout(() => { try { const p = document.getElementById('__wb_highlight_overlay'); if (p) p.remove(); } catch (e) {} }, 4500);
+          try { sendResponse({ status: 'highlighted' }); } catch (e) {}
+        } catch (e) { try { sendResponse({ status: 'error' }); } catch (err) {} }
+      } else {
+        // Build suggestion payload to help the user pick an alternative selector
+        try {
+          const suggestions = [];
+          // helper: xpath for element
+          function getXPathForElement(el) {
+            if (!el || el.nodeType !== 1) return null;
+            const parts = [];
+            while (el && el.nodeType === 1) {
+              let nb = 0;
+              let sib = el.previousSibling;
+              while (sib) {
+                if (sib.nodeType === 1 && sib.nodeName === el.nodeName) nb += 1;
+                sib = sib.previousSibling;
+              }
+              const idx = nb ? `[${nb + 1}]` : '';
+              parts.unshift(el.nodeName.toLowerCase() + idx);
+              el = el.parentNode;
+              if (el && el.nodeName && el.nodeName.toLowerCase() === 'html') break;
+            }
+            return parts.length ? '//' + parts.join('/') : null;
+          }
+
+          // If textFallback supplied, look for elements containing that text
+          if (textFallback && typeof textFallback === 'string' && textFallback.trim().length) {
+            try {
+              const needle = String(textFallback).trim();
+              const candidates = Array.from(document.querySelectorAll('a, button, span, div, label, li, option, [role="option"]'));
+              for (let i = 0; i < candidates.length && suggestions.length < 6; i++) {
+                const node = candidates[i];
+                try {
+                  const txt = (node.textContent || '').trim();
+                  if (txt && txt.indexOf(needle) !== -1) {
+                    suggestions.push({ xpath: getXPathForElement(node), text: txt, selector: null, selector_type: 'xpath' });
+                  }
+                } catch (ee) {}
+              }
+            } catch (e) {}
+          }
+
+          // If CSS selector provided, try to extract id/class tokens and find related elements
+          if (sel && type === 'css') {
+            try {
+              const idMatch = sel.match(/#([\w\-:\.]+)/);
+              if (idMatch && idMatch[1]) {
+                const elById = document.getElementById(idMatch[1]); if (elById) suggestions.push({ selector: `#${idMatch[1]}`, selector_type: 'css', text: (elById.textContent||'').trim() });
+              }
+              const classMatches = Array.from(sel.matchAll(/\.([\w\-:\.]+)/g)).map(m => m[1]);
+              for (let i = 0; i < classMatches.length && suggestions.length < 6; i++) {
+                try { const nodes = Array.from(document.getElementsByClassName(classMatches[i])); if (nodes && nodes[0]) suggestions.push({ selector: `.${classMatches[i]}`, selector_type: 'css', text: (nodes[0].textContent||'').trim() }); } catch (ee) {}
+              }
+            } catch (e) {}
+          }
+
+          // Additional: sample top anchors and buttons (first few) to provide quick targets
+          try {
+            const quick = Array.from(document.querySelectorAll('a[href], button')).slice(0, 6 - suggestions.length);
+            quick.forEach((n) => { if (suggestions.length < 6) suggestions.push({ xpath: getXPathForElement(n), selector: null, selector_type: 'xpath', text: (n.textContent||'').trim() }); });
+          } catch (e) {}
+
+          try { sendResponse({ status: 'not_found', suggestions }); } catch (e) { sendResponse({ status: 'not_found' }); }
+        } catch (e) { try { sendResponse({ status: 'not_found' }); } catch (ee) {} }
+      }
+    } catch (e) { try { sendResponse({ status: 'error' }); } catch (ee) {} }
+    return true;
+  } else if (request.operation === 'clear_highlight') {
+    try { const prev = document.getElementById('__wb_highlight_overlay'); if (prev) prev.remove(); try { sendResponse({ status: 'cleared' }); } catch (e) {} } catch (e) { try { sendResponse({ status: 'error' }); } catch (ee) {} }
+    return true;
   } else if (request.operation === 'get_dom_for_scan') {
     const prunedHtml = getPrunedDom();
     sendResponse({ html: prunedHtml });

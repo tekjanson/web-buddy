@@ -3,8 +3,14 @@
   try {
     const runTranslated = (actions, targetTabId) => {
       if (!actions) return Promise.reject(new Error('no actions'));
-      const msg = { operation: 'run_translated', actions, targetTabId };
-      return new Promise((resolve) => { window.$host.runtime.sendMessage(msg, (resp) => resolve(resp)); });
+      const msg = {
+        operation: 'run_translated',
+        actions,
+        targetTabId
+      };
+      return new Promise((resolve) => {
+        window.$host.runtime.sendMessage(msg, (resp) => resolve(resp));
+      });
     };
 
     const runList = async () => {

@@ -11,12 +11,14 @@
     "sourceType": "module"
   },
   "rules": {
-    // turn off most stylistic rules so legacy codebase passes lint
+  // turn off most stylistic rules so legacy codebase passes lint
     "no-console": "off",
     "no-underscore-dangle": "off",
     "consistent-return": "off",
     "comma-dangle": "off",
-    "max-len": "off",
+  // enforce a maximum line length across the project
+  // keep comments/URLs/templates exempt to avoid noisy failures
+  "max-len": ["error", { "code": 100, "ignoreComments": true, "ignoreUrls": true, "ignoreStrings": true, "ignoreTemplateLiterals": true, "ignoreRegExpLiterals": true }],
     "no-template-curly-in-string": "off",
     "no-plusplus": "off",
     "guard-for-in": "off",

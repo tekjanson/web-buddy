@@ -13,12 +13,59 @@
   window.getTargetTab = function getTargetTab(cb) {
     try {
       const _host = window.$host || ((typeof host !== 'undefined') ? host : (typeof chrome !== 'undefined' ? chrome : (typeof browser !== 'undefined' ? browser : {})));
-      _host.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
-        let t = (tabs && tabs[0]) ? tabs[0] : null;
-        if (t && t.id) return cb(t);
-        // fallback to any active tab
-        try { _host.tabs.query({ active: true }, (tabs2) => cb((tabs2 && tabs2[0]) ? tabs2[0] : null)); } catch (e) { cb(null); }
-      });
+
+      // If the popup has an associated tab (e.g. pinned popup opened on a specific tab), try to return that first
+      if (window._wb_popup_associated_tab && window._wb_popup_associated_tab.id) {
+        try {
+          _host.tabs.get(window._wb_popup_associated_tab.id, (tabById) => {
+            if (tabById && tabById.id) return cb(tabById);
+            // if the associated tab isn't available, fall through to normal selection
+            queryPrefer();
+          });
+          return; // tabs.get is async; we'll return and let the callback call cb
+        } catch (e) {
+          // ignore and fall through to queryPrefer
+        }
+      }
+
+      function queryPrefer() {
+        try {
+          _host.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+            // Prefer a tab that has a usable http(s) URL (not the extension popup or internal pages)
+            let t = null;
+            if (tabs && tabs.length) {
+              for (let i = 0; i < tabs.length; i++) {
+                const cand = tabs[i];
+                try {
+                  if (cand && cand.url && (cand.url.indexOf('http://') === 0 || cand.url.indexOf('https://') === 0)) { t = cand; break; }
+                } catch (err) { /* ignore malformed */ }
+              }
+            }
+            // if none found, fall back to first tab if present
+            if (!t) t = (tabs && tabs[0]) ? tabs[0] : null;
+            if (t && t.id) return cb(t);
+
+            // fallback to any active tab
+            try {
+              _host.tabs.query({ active: true }, (tabs2) => {
+                let t2 = null;
+                if (tabs2 && tabs2.length) {
+                  for (let j = 0; j < tabs2.length; j++) {
+                    const cand2 = tabs2[j];
+                    try {
+                      if (cand2 && cand2.url && (cand2.url.indexOf('http://') === 0 || cand2.url.indexOf('https://') === 0)) { t2 = cand2; break; }
+                    } catch (err2) { /* ignore */ }
+                  }
+                }
+                if (!t2) t2 = (tabs2 && tabs2[0]) ? tabs2[0] : null;
+                cb(t2);
+              });
+            } catch (err3) { cb(null); }
+          });
+        } catch (err4) { cb(null); }
+      }
+
+      queryPrefer();
     } catch (e) { cb(null); }
   };
 

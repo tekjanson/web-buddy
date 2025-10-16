@@ -88,19 +88,44 @@ function sendMessageToTabObj(tabObj, message) {
 
     // Now, send the message.
     bgDebug('sending to tab', tabObj.id, message);
-    host.tabs.sendMessage(tabObj.id, message, (response) => {
-      const lastErr = host.runtime && host.runtime.lastError;
-      if (lastErr) {
-        // The "receiving end does not exist" error is common and often benign if the tab just closed.
-        const msg = lastErr.message || String(lastErr);
-        const benignRe = /Receiving end does not exist|Could not establish connection|The message port closed before a response/;
-        if (!benignRe.test(msg)) {
-          console.warn(`sendMessage to tab ${tabObj.id} failed:`, msg);
+      host.tabs.sendMessage(tabObj.id, message, (response) => {
+        const lastErr = host.runtime && host.runtime.lastError;
+        if (lastErr) {
+          // The "receiving end does not exist" error is common and often benign if the tab just closed.
+          const msg = lastErr.message || String(lastErr);
+          const benignRe = /Receiving end does not exist|Could not establish connection|The message port closed before a response/;
+          if (!benignRe.test(msg)) {
+            console.warn(`sendMessage to tab ${tabObj.id} failed:`, msg);
+          }
+          // If this was an execute_commands message, persist it under pending_commands
+            try {
+            if (message && message.operation === 'execute_commands' && Array.isArray(message.commands)) {
+              storage.get({ pending_commands: {} }, (s) => {
+                const pending = s.pending_commands || {};
+                // Mark this persisted entry as not eligible for automatic re-execution
+                // to avoid accidental runs when the page later loads. A later explicit
+                // retry or user action can requeue with autoRun=true if desired.
+                pending[tabObj.id] = { commands: message.commands, time: Date.now(), error: msg, autoRun: false, source: 'send_error' };
+                storage.set({ pending_commands: pending }, () => { bgDebug('persisted pending_commands for tab (autoRun=false) ', tabObj.id); });
+              });
+            }
+          } catch (e) { bgDebug('failed to persist execute_commands into pending_commands', e); }
+        } else {
+          bgDebug(`[sendMessageToTabObj] Successfully sent message to tab ${tabObj.id}. Response:`, response);
+          // Clear any pending_commands for this tab since we've delivered
+          try {
+            if (message && message.operation === 'execute_commands') {
+              storage.get({ pending_commands: {} }, (s) => {
+                const pending = s.pending_commands || {};
+                if (pending && pending[tabObj.id]) {
+                  delete pending[tabObj.id];
+                  storage.set({ pending_commands: pending }, () => { bgDebug('cleared pending_commands for tab', tabObj.id); });
+                }
+              });
+            }
+          } catch (e) { bgDebug('failed to clear pending_commands after successful send', e); }
         }
-      } else {
-        bgDebug(`[sendMessageToTabObj] Successfully sent message to tab ${tabObj.id}. Response:`, response);
-      }
-    });
+      });
   });
 }
 
