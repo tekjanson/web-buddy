@@ -7,7 +7,7 @@
 /* global storage bgDebug initMqttIfEnabled updateState host handleMessage */
 /* global chrome URL Blob instruction */
 
-try { storage.onChanged.addListener((changes) => { if (changes.mqtt_broker || changes.mqtt_enabled) { bgDebug('mqtt storage changed, re-init'); initMqttIfEnabled(); } }); } catch (e) {}
+try { storage.onChanged.addListener((changes) => { if (changes.mqtt_ctrl_broker || changes.mqtt_ctrl_enabled || changes.mqtt_broker || changes.mqtt_enabled || changes.mqtt_llm_broker || changes.mqtt_llm_enabled) { bgDebug('mqtt storage changed, re-init'); initMqttIfEnabled(); } }); } catch (e) {}
 
 // initialize selected translator from storage and watch for changes
 try {

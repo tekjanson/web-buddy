@@ -80,6 +80,25 @@
       </div>
     </div>
 
+    <div id="mqtt-llm-settings" style="margin-top:12px; border-top:1px solid #eee; padding-top:12px;">
+      <label for="llm-broker-url">LLM Broker URL (wss:// or ws://)</label>
+      <input type="text" id="llm-broker-url" />
+
+      <label for="llm-client-id">LLM Client ID</label>
+      <input type="text" id="llm-client-id" />
+
+      <label for="llm-username">LLM Username (optional)</label>
+      <input type="text" id="llm-username" />
+
+      <label for="llm-password">LLM Password (optional)</label>
+      <input type="password" id="llm-password" />
+
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-wide" id="save-llm-broker">Save LLM Broker</button>
+        <span id="llm-broker-status" aria-live="polite" style="margin-left:8px;color:#333;font-size:0.95rem"></span>
+      </div>
+    </div>
+
     <div id="gemini-settings" style="display: none;">
       <label for="gemini-api-key">API Key</label>
       <input type="password" id="gemini-api-key" />

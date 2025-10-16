@@ -93,13 +93,22 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleProviderSettings(provider);
   });
 
-  // load broker settings
-  storage.get({ mqtt_broker: {} }, (state) => {
-    const b = state.mqtt_broker || {};
-    document.getElementById('broker-url').value = b.brokerUrl || '';
+  // load broker settings (control)
+  storage.get({ mqtt_ctrl_broker: {} }, (state) => {
+    const b = state.mqtt_ctrl_broker || {};
+    document.getElementById('broker-url').value = b.brokerUrl || 'ws://localhost:9001';
     document.getElementById('client-id').value = b.clientId || '';
     document.getElementById('username').value = b.username || '';
     document.getElementById('password').value = b.password || '';
+  });
+
+  // load LLM broker settings (separate)
+  storage.get({ mqtt_llm_broker: {} }, (state) => {
+    const b = state.mqtt_llm_broker || {};
+    document.getElementById('llm-broker-url').value = b.brokerUrl || 'ws://localhost:9001';
+    document.getElementById('llm-client-id').value = b.clientId || '';
+    document.getElementById('llm-username').value = b.username || '';
+    document.getElementById('llm-password').value = b.password || '';
   });
 
   // load gemini settings
@@ -119,9 +128,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     const cfg = { brokerUrl, clientId, username, password };
-    storage.set({ mqtt_broker: cfg }, () => {
+    storage.set({ mqtt_ctrl_broker: cfg }, () => {
       const hintEl = document.getElementById('hint-ai-provider');
-      if (hintEl) hintEl.textContent = 'Broker settings saved';
+      if (hintEl) hintEl.textContent = 'Control broker settings saved';
+      setTimeout(() => { if (hintEl) hintEl.textContent = 'Configure and select your AI provider for suggestions and execution.'; }, 1500);
+    });
+  });
+
+  document.getElementById('save-llm-broker').addEventListener('click', () => {
+    const brokerUrl = document.getElementById('llm-broker-url').value;
+    const clientId = document.getElementById('llm-client-id').value;
+    const username = document.getElementById('llm-username').value;
+    const password = document.getElementById('llm-password').value;
+    const cfg = { brokerUrl, clientId, username, password };
+    storage.set({ mqtt_llm_broker: cfg }, () => {
+      const hintEl = document.getElementById('hint-ai-provider');
+      if (hintEl) hintEl.textContent = 'LLM broker settings saved';
       setTimeout(() => { if (hintEl) hintEl.textContent = 'Configure and select your AI provider for suggestions and execution.'; }, 1500);
     });
   });

@@ -161,9 +161,10 @@ function updateScanButton(isPageContextMode) {
   scanBtn.textContent = isPageContextMode ? 'Stop Scan' : 'Scan';
 }
 function operation(e) {
-  if (e.target.id === 'pom') {
-    // Open the lightweight POM helper window (legacy UI)
-    window.open($host.runtime.getURL('./src/background.html'), 'pom-helper', 'width=400,height=400');
+    if (e.target.id === 'pom') {
+    // Open the options page instead of legacy background helper (MV2 UI removed)
+    try { $host.runtime.openOptionsPage(); } catch (err) { $host.tabs.create({ url: $host.runtime.getURL('src/options.html') }); }
+    return;
   }
 
   // The new scan logic is handled client-side in the popup, so we don't send a message to background.
@@ -405,11 +406,8 @@ document.addEventListener(
 
     //     activities.addEventListener("onchange", function()
     $('#keywordSelect').change((select) => {
-      const popupWindow = window.open(
-        $host.runtime.getURL('./src/background.html'),
-        'exampleName',
-        'width=400,height=400'
-      );
+      // Legacy helper popup removed; open options page as a replacement
+      try { $host.runtime.openOptionsPage(); } catch (err) { $host.tabs.create({ url: $host.runtime.getURL('src/options.html') }); }
 
       //   var killDiv = document.getElementById("tempDiv");
       //   if (killDiv !== null) {
@@ -566,9 +564,10 @@ document.addEventListener(
 
     // Show mqtt status (enabled/disabled + broker url)
     try {
-      storage.get({ mqtt_enabled: false, mqtt_broker: {} }, (s) => {
-        const st = s.mqtt_enabled ? 'enabled' : 'disabled';
-        const url = (s.mqtt_broker && s.mqtt_broker.brokerUrl) ? s.mqtt_broker.brokerUrl : 'no broker';
+      storage.get({ mqtt_ctrl_enabled: false, mqtt_ctrl_broker: {}, mqtt_broker: {} }, (s) => {
+        const broker = (s.mqtt_ctrl_broker && Object.keys(s.mqtt_ctrl_broker).length) ? s.mqtt_ctrl_broker : (s.mqtt_broker || {});
+        const st = (typeof s.mqtt_ctrl_enabled !== 'undefined') ? (s.mqtt_ctrl_enabled ? 'enabled' : 'disabled') : (s.mqtt_enabled ? 'enabled' : 'disabled');
+        const url = (broker && broker.brokerUrl) ? broker.brokerUrl : 'ws://localhost:9001';
         const el = document.getElementById('mqtt-status');
         if (el) el.textContent = `MQTT: ${st} — ${url}`;
       });
@@ -665,8 +664,8 @@ document.addEventListener(
                     }
                     const d = diagResp.diagnostics || {};
                     const lines = [];
-                    lines.push(`mqtt_enabled=${d.mqtt_enabled}`);
-                    lines.push(`brokerUrl=${(d.mqtt_broker && d.mqtt_broker.brokerUrl) || 'none'}`);
+                    if (d.control) lines.push(`control.enabled=${d.control.enabled}, url=${(d.control.broker && d.control.broker.brokerUrl) || 'none'}`);
+                    if (d.llm) lines.push(`llm.enabled=${d.llm.enabled}, url=${(d.llm.broker && d.llm.broker.brokerUrl) || 'none'}`);
                     lines.push(`bridgePresent=${d.bridgePresent}`);
                     lines.push(`clientPresent=${d.clientPresent}`);
                     lines.push(`clientConnected=${d.clientConnected}`);

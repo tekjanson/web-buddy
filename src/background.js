@@ -217,10 +217,12 @@ function getTranslator() {
 
 function initMqttIfEnabled() {
   try {
-    storage.get({ mqtt_broker: {}, mqtt_enabled: false }, (cfg) => {
-      const broker = cfg.mqtt_broker || {};
-      const enabled = cfg.mqtt_enabled || false;
-      bgDebug('initMqttIfEnabled read storage', { mqtt_enabled: enabled, mqtt_broker: broker });
+    // Prefer control broker settings (separate from LLM broker). Fall back to legacy mqtt_broker.
+    storage.get({ mqtt_ctrl_broker: {}, mqtt_ctrl_enabled: false, mqtt_broker: {} }, (cfg) => {
+      const broker = cfg.mqtt_ctrl_broker && Object.keys(cfg.mqtt_ctrl_broker).length ? cfg.mqtt_ctrl_broker : (cfg.mqtt_broker || {});
+      const enabled = (typeof cfg.mqtt_ctrl_enabled !== 'undefined') ? cfg.mqtt_ctrl_enabled : (cfg.mqtt_enabled || false);
+      if (!broker || !broker.brokerUrl) broker.brokerUrl = broker.brokerUrl || 'ws://localhost:9001';
+      bgDebug('initMqttIfEnabled read storage', { mqtt_ctrl_enabled: enabled, mqtt_ctrl_broker: broker });
       if (!enabled || !broker || !broker.brokerUrl) {
         if (typeof MqttBridge !== 'undefined' && mqttActive) {
           try { MqttBridge.stop(); } catch (e) {}
@@ -277,7 +279,7 @@ function initMqttIfEnabled() {
   } catch (e) { console.warn('initMqttIfEnabled error', e); }
 }
 
-try { storage.onChanged.addListener((changes) => { if (changes.mqtt_broker || changes.mqtt_enabled) { bgDebug('mqtt storage changed, re-init'); initMqttIfEnabled(); } }); } catch (e) {}
+try { storage.onChanged.addListener((changes) => { if (changes.mqtt_ctrl_broker || changes.mqtt_ctrl_enabled || changes.mqtt_broker || changes.mqtt_enabled || changes.mqtt_llm_broker || changes.mqtt_llm_enabled) { bgDebug('mqtt storage changed, re-init'); initMqttIfEnabled(); } }); } catch (e) {}
 
 // initialize selected translator from storage and watch for changes
 try {
@@ -648,21 +650,31 @@ host.runtime.onMessage.addListener((request = {}, sender, sendResponse) => {
     });
   }
   else if (operation === 'mqtt_status') {
-    // return useful diagnostics for debugging MQTT
+    // return useful diagnostics for debugging MQTT (include control and LLM configs)
     try {
-      storage.get({ mqtt_enabled: false, mqtt_broker: {} }, (cfg) => {
-        const broker = cfg.mqtt_broker || {};
-        const enabled = !!cfg.mqtt_enabled;
+      storage.get({ mqtt_ctrl_enabled: false, mqtt_ctrl_broker: {}, mqtt_llm_enabled: false, mqtt_llm_broker: {}, mqtt_enabled: false, mqtt_broker: {} }, (cfg) => {
+        const ctrlBroker = (cfg.mqtt_ctrl_broker && Object.keys(cfg.mqtt_ctrl_broker).length) ? cfg.mqtt_ctrl_broker : (cfg.mqtt_broker || {});
+        const ctrlEnabled = (typeof cfg.mqtt_ctrl_enabled !== 'undefined') ? !!cfg.mqtt_ctrl_enabled : !!cfg.mqtt_enabled;
+        const llmBroker = (cfg.mqtt_llm_broker && Object.keys(cfg.mqtt_llm_broker).length) ? cfg.mqtt_llm_broker : {};
+        const llmEnabled = !!cfg.mqtt_llm_enabled;
+
         const bridgePresent = (typeof MqttBridge !== 'undefined');
         const clientPresent = bridgePresent && !!MqttBridge.client;
         const clientConnected = clientPresent && !!MqttBridge.client.connected;
+
         const diagnostics = {
-          mqtt_enabled: enabled,
-          mqtt_broker: broker,
-          mqttPrefix,
-          bridgePresent,
-          clientPresent,
-          clientConnected,
+          control: {
+            enabled: ctrlEnabled,
+            broker: ctrlBroker,
+            mqttPrefix,
+            bridgePresent,
+            clientPresent,
+            clientConnected,
+          },
+          llm: {
+            enabled: llmEnabled,
+            broker: llmBroker,
+          }
         };
         bgDebug('mqtt_status requested', diagnostics);
         sendResponse({ diagnostics });

@@ -386,11 +386,28 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ pong: true });
     return true; // Keep channel open for async response
   }
-  if (request.operation === 'record') { locatorStrategies = (request.locators || []).slice(); locatorStrategies.push('index'); attachRecordingListeners(); debugLog('received record operation, locatorStrategies', locatorStrategies); }
-  else if (request.operation === 'stop') { detachRecordingListeners(); debugLog('received stop operation'); }
-  else if (request.operation === 'execute_commands') { const cmds = request.commands || []; debugLog('execute_commands received', cmds && cmds.length); executeCommands(cmds); }
-  else if (request.operation === 'scan') { locatorStrategies = (request.locators || []).slice(); locatorStrategies.push('index'); detachRecordingListeners(); scanner.limit = 1000; const scripts = scanner.parseNodes([], document.body, locatorStrategies); sendAction(scripts); }
-  else if (request.operation === 'get_page_html') {
+  if (request.operation === 'record') {
+    locatorStrategies = (request.locators || []).slice(); locatorStrategies.push('index'); attachRecordingListeners(); debugLog('received record operation, locatorStrategies', locatorStrategies);
+  } else if (request.operation === 'stop') {
+    detachRecordingListeners(); debugLog('received stop operation');
+  } else if (request.operation === 'execute_commands') {
+    const cmds = request.commands || [];
+    debugLog('execute_commands received', cmds && cmds.length);
+    executeCommands(cmds);
+  } else if (request.operation === 'execute') {
+    // single command execution (from MQTT/background)
+    const cmd = request.command || null;
+    if (cmd) {
+      debugLog('execute (single) received in content script', cmd);
+      // run as a one-item command list
+      try { executeCommands([cmd]); } catch (e) { debugLog('execute single command failed', e); }
+      try { sendResponse({ status: 'accepted' }); } catch (e) { debugLog('sendResponse execute ack failed', e); }
+    } else {
+      try { sendResponse({ status: 'no_command' }); } catch (e) { debugLog('sendResponse no_command failed', e); }
+    }
+  } else if (request.operation === 'scan') {
+    locatorStrategies = (request.locators || []).slice(); locatorStrategies.push('index'); detachRecordingListeners(); scanner.limit = 1000; const scripts = scanner.parseNodes([], document.body, locatorStrategies); sendAction(scripts);
+  } else if (request.operation === 'get_page_html') {
     const prunedHtml = getPrunedDom();
     sendResponse({ html: prunedHtml });
     return true; // Indicate async response
@@ -398,6 +415,21 @@ host.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const prunedHtml = getPrunedDom();
     sendResponse({ html: prunedHtml });
     return true; // Indicate async response
+  } else if (request.operation === 'request_screenshot') {
+    // Best-effort screenshot: prefer html2canvas if present, otherwise return null
+    try {
+      if (typeof window.html2canvas === 'function' || typeof window.html2canvas === 'object') {
+        try {
+          window.html2canvas(document.documentElement).then((c) => {
+            try { const dataUrl = c.toDataURL('image/png'); sendResponse({ dataUrl }); } catch (e) { sendResponse({ dataUrl: null }); }
+          }).catch((e) => { debugLog('html2canvas promise failed', e); sendResponse({ dataUrl: null }); });
+          return true;
+        } catch (e) { debugLog('html2canvas call failed', e); sendResponse({ dataUrl: null }); return true; }
+      }
+      // fallback: not available
+      sendResponse({ dataUrl: null });
+      return true;
+    } catch (e) { debugLog('request_screenshot failed', e); sendResponse({ dataUrl: null }); return true; }
   }
 });
 

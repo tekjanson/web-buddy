@@ -546,17 +546,19 @@ function handleMessage(request, sender, sendResponse) {
     setOffscreenReady(true);
   }
   else if (operation === 'mqtt_status') {
-    // return useful diagnostics for debugging MQTT
+    // return useful diagnostics for debugging MQTT (control & LLM brokers)
     try {
-      storage.get({ mqtt_enabled: false, mqtt_broker: {} }, (cfg) => {
-        const broker = cfg.mqtt_broker || {};
-        const enabled = !!cfg.mqtt_enabled;
+      storage.get({ mqtt_ctrl_enabled: false, mqtt_ctrl_broker: {}, mqtt_llm_enabled: false, mqtt_llm_broker: {} }, (cfg) => {
+        const ctrlBroker = cfg.mqtt_ctrl_broker || {};
+        const ctrlEnabled = !!cfg.mqtt_ctrl_enabled;
+        const llmBroker = cfg.mqtt_llm_broker || {};
+        const llmEnabled = !!cfg.mqtt_llm_enabled;
         const bridgePresent = (typeof MqttBridge !== 'undefined');
         const clientPresent = bridgePresent && !!MqttBridge.client;
         const clientConnected = clientPresent && !!MqttBridge.client.connected;
         const diagnostics = {
-          mqtt_enabled: enabled,
-          mqtt_broker: broker,
+          control: { enabled: ctrlEnabled, broker: ctrlBroker },
+          llm: { enabled: llmEnabled, broker: llmBroker },
           mqttPrefix,
           bridgePresent,
           clientPresent,
