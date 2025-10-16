@@ -484,6 +484,10 @@ document.addEventListener(
     // AI Assist is initialized from popup-ai.js
     if (window._wb_initAiAssist) window._wb_initAiAssist();
 
+    // Initialize UI and action modules extracted into separate files
+    try { window._wb_initUi && window._wb_initUi(); } catch (e) {}
+    try { window._wb_initActions && window._wb_initActions(); } catch (e) {}
+
     ['demo', 'verify'].forEach((id) => {
       document.getElementById(id).addEventListener('change', settings);
     });
